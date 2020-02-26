@@ -9,15 +9,17 @@ layout( binding = 0 ) uniform UniformBufferObject
 
 } ubo;
 
-layout( location = 0 ) in vec3 fragColor;
+layout(binding = 1) uniform sampler2D texSampler;
 
+layout( location = 0 ) in vec3 fragColor;
 layout( location = 0 ) out vec4 outColor;
 
 void main()
 { 
 
-	vec2 uv = ( -ubo.iResolution.xy + 2.0 * gl_FragCoord.xy ) / ubo.iResolution.y;
+	//vec2 uv = ( -ubo.iResolution.xy + 2.0 * gl_FragCoord.xy ) / ubo.iResolution.y;
+	vec2 uv = gl_FragCoord.xy / ubo.iResolution.xy;
 
-    outColor = vec4( length( uv ) );
+    outColor = texture( texSampler, uv );
 
 }
