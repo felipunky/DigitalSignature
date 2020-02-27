@@ -9,17 +9,32 @@ layout( binding = 0 ) uniform UniformBufferObject
 
 } ubo;
 
-layout(binding = 1) uniform sampler2D texSampler;
+layout(binding = 1) uniform sampler2D texSampler[2];
 
 layout( location = 0 ) in vec3 fragColor;
 layout( location = 0 ) out vec4 outColor;
 
+const float siz = 3.0;
+
 void main()
 { 
 
-	//vec2 uv = ( -ubo.iResolution.xy + 2.0 * gl_FragCoord.xy ) / ubo.iResolution.y;
 	vec2 uv = gl_FragCoord.xy / ubo.iResolution.xy;
+    
+    vec4 col = texture( texSampler[0], uv );
+	vec4 digitalStamp = texture( texSampler[1], uv * siz ); 
+  
+    float normalized = 1.0 / siz;
+    float percentage = 1.0 - normalized;
 
-    outColor = texture( texSampler, uv );
+    // Output to screen
+    if( digitalStamp.a > 0.0 && uv.x > percentage && uv.y > normalized * 2.0 )
+	{
+
+		col = digitalStamp;
+
+	} 
+
+    outColor = col;
 
 }
