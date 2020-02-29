@@ -35,6 +35,6 @@ void main()
 
 	} 
 
-    outColor = col;
+	outColor = col;
 
 }

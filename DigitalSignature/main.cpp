@@ -5,6 +5,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 #include <iostream>
 #include <fstream>
@@ -163,13 +165,9 @@ private:
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels;
 
-	//VkImage textureImage, textureImageOne;
 	VkImage textureImage[NUMBER_OF_IMAGES];
-	//VkDeviceMemory textureImageMemory, textureImageMemoryOne;
 	VkDeviceMemory textureImageMemory[NUMBER_OF_IMAGES];
-	//VkImageView textureImageView, textureImageViewOne;
 	VkImageView textureImageView[NUMBER_OF_IMAGES];
-	//VkSampler textureSampler, textureSamplerOne;
 	VkSampler textureSampler[NUMBER_OF_IMAGES];
 
 	VkBuffer vertexBuffer;
@@ -190,6 +188,9 @@ private:
 	std::vector<VkFence> inFlightFences;
 	std::vector<VkFence> imagesInFlight;
 	size_t currentFrame = 0;
+	uint32_t imageIndex = 0;
+
+	bool writeImage = false;
 
 	bool framebufferResized = false;
 
@@ -199,7 +200,7 @@ private:
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		getImageSize(IMAGE_NAMES[0]);
-		window = glfwCreateWindow(texWidth, texHeight, "Vulkan", nullptr, nullptr);
+		window = glfwCreateWindow(texWidth, texHeight, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
@@ -1226,20 +1227,35 @@ private:
 		}
 	}
 
-	void updateUniformBuffer(uint32_t currentImage) {
+	void updateUniformBuffer() {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
+
+			auto color_file_name = "D:/Downloads/ImageTest/color.ppm";
+
+			SaveOutputColorTexture(color_file_name);
+
+			writeImage = true;
+		}
+
+		else {
+
+			writeImage = false;
+
+		}
 
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
 		ubo.iTime = time;
 
 		void* data;
-		vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
+		vkMapMemory(device, uniformBuffersMemory[imageIndex], 0, sizeof(ubo), 0, &data);
 		memcpy(data, &ubo, sizeof(ubo));
-		vkUnmapMemory(device, uniformBuffersMemory[currentImage]);
+		vkUnmapMemory(device, uniformBuffersMemory[imageIndex]);
 
 	}
 
@@ -1249,7 +1265,6 @@ private:
 
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
-		uint32_t imageIndex;
 		VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -1265,7 +1280,7 @@ private:
 		}
 		imagesInFlight[imageIndex] = inFlightFences[currentFrame];
 
-		updateUniformBuffer(imageIndex);
+		updateUniformBuffer();
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1597,7 +1612,9 @@ private:
 
 
 		VkCommandBuffer copyCmd;
-		if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd) != VK_SUCCESS);
+		if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd) != VK_SUCCESS) {
+			throw::std::runtime_error("failed to allocate a command buffer!");
+		}
 
 		VkCommandBufferBeginInfo cmdBufInfo{};
 		cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1717,11 +1734,48 @@ private:
 		vkGetImageSubresourceLayout(device, dstImage, &subResource, &subResourceLayout);
 
 		// Map image memory so we can start copying from it
-		const char* data;
+	    unsigned char* data;
 		vkMapMemory(device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
 		data += subResourceLayout.offset;
 
-		std::ofstream file(path, std::ios::out | std::ios::binary);
+		// If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
+		bool colorSwizzle = false;
+		// Check if source is BGR
+		// Note: Not complete, only contains most common and basic BGR surface formats for demonstation purposes
+		if (!supportsBlit)
+		{
+			std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
+		}
+
+		if (colorSwizzle) {
+
+			unsigned char* swizzled = new unsigned char[WIDTH * HEIGHT * 4];
+			int offset = 0, iter = 0;
+
+			for (int y = HEIGHT - 1; y >= 0; y--)
+			{
+				for (int x = 0; x < WIDTH; x++)
+				{
+					swizzled[(x + y * WIDTH) * 4] = data[(x + y * WIDTH) * 4 + 2];
+					swizzled[(x + y * WIDTH) * 4 + 1] = data[(x + y * WIDTH) * 4 + 1];
+					swizzled[(x + y * WIDTH) * 4 + 2] = data[(x + y * WIDTH) * 4];
+					swizzled[(x + y * WIDTH) * 4 + 3] = data[(x + y * WIDTH) * 4 + 3];
+				}
+			}
+
+			stbi_write_jpg("D:/Downloads/ImageTest/Test.png", WIDTH, HEIGHT, 4, swizzled, 0);
+
+			delete swizzled;
+
+		}
+
+		else {
+			stbi_write_jpg("D:/Downloads/ImageTest/Test.png", WIDTH, HEIGHT, 4, data, 0);
+		}
+
+
+		/*std::ofstream file(path, std::ios::out | std::ios::binary);
 
 		// ppm header
 		file << "P6\n" << WIDTH << "\n" << HEIGHT << "\n" << 255 << "\n";
@@ -1736,9 +1790,6 @@ private:
 			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
 		}
 
-		auto image_size = HEIGHT * WIDTH;
-
-
 		for (uint32_t y = 0; y < HEIGHT; y++)
 		{
 			unsigned int *row = (unsigned int*)data;
@@ -1746,9 +1797,13 @@ private:
 			{
 				if (colorSwizzle)
 				{
-					file.write((char*)row + 2, 1);
-					file.write((char*)row + 1, 1);
-					file.write((char*)row, 1);
+					const char* r = (char*)row + 2;
+					const char* g = (char*)row + 1;
+					const char* b = (char*)row;
+
+					file.write(r, 1);
+					file.write(g, 1);
+					file.write(b, 1);
 				}
 				else
 				{
@@ -1759,7 +1814,7 @@ private:
 			data += subResourceLayout.rowPitch;
 		}
 
-		file.close();
+		file.close();*/
 
 		std::cout << "Screenshot saved to disk" << std::endl;
 
@@ -1800,15 +1855,6 @@ private:
 			0, nullptr,
 			0, nullptr,
 			1, &imageMemoryBarrier);
-	}
-
-	void updateUniformBuffer() {
-		if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
-
-			auto color_file_name = "D:/Downloads/ImageTest/color.ppm";
-
-			SaveOutputColorTexture(color_file_name);
-		}
 	}
 };
 
