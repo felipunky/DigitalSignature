@@ -22,8 +22,8 @@
 #include <optional>
 #include <set>
 
-int WIDTH = 800, LOGO_WIDTH = 1024;
-int HEIGHT = 600, LOGO_HEIGHT = 1024;
+int WIDTH = 800;
+int HEIGHT = 600;
 
 const int NUMBER_OF_IMAGES = 2;
 
@@ -166,7 +166,9 @@ private:
 
 	VkCommandPool commandPool;
 
-	int texWidth, texHeight, texChannels;
+	int IMAGE_WIDTH[NUMBER_OF_IMAGES] = { 0, 0 }, 
+		IMAGE_HEIGHT[NUMBER_OF_IMAGES] = { 0, 0 }, 
+		IMAGE_CHANNELS[NUMBER_OF_IMAGES] = { 0, 0 };
 	stbi_uc* pixels;
 
 	VkImage textureImage[NUMBER_OF_IMAGES];
@@ -203,10 +205,17 @@ private:
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-		getImageSize(IMAGE_NAMES[0]);
-		window = glfwCreateWindow(texWidth, texHeight, "THR34D5 Digital Signature", nullptr, nullptr);
+		getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
+		window = glfwCreateWindow(IMAGE_WIDTH[0], IMAGE_HEIGHT[0], "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+		GLFWimage images[2];
+		images[0].pixels = stbi_load("Images/Icons/WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
+		images[1].pixels = stbi_load("Images/Icons/WindowIcon_Small.png", &images[1].width, &images[1].height, 0, 4); 
+		glfwSetWindowIcon(window, 1, images); 
+		stbi_image_free(images[0].pixels);
+		stbi_image_free(images[1].pixels);
 	}
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
@@ -527,7 +536,7 @@ private:
 		swapChainImageViews.resize(swapChainImages.size());
 
 		for (size_t i = 0; i < swapChainImages.size(); i++) {
-			swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat);
+			swapChainImageViews[i] = createImageView(&swapChainImages[i], swapChainImageFormat);
 		}
 	}
 
@@ -602,8 +611,8 @@ private:
 	}
 
 	void createGraphicsPipeline() {
-		auto vertShaderCode = readFile("vert.spv");
-		auto fragShaderCode = readFile("frag.spv");
+		auto vertShaderCode = readFile("Shaders/vert.spv");
+		auto fragShaderCode = readFile("Shaders/frag.spv");
 
 		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -760,16 +769,16 @@ private:
 		}
 	}
 
-	void getImageSize(std::string textureName) {
-		pixels = stbi_load(textureName.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	void getImageSize(std::string textureName, int *texWidth, int* texHeight, int* texChannels) {
+		pixels = stbi_load(textureName.c_str(), texWidth, texHeight, texChannels, STBI_rgb_alpha);
 	}
 
 	void createTextureImage() {
 		for (int i = 0; i < NUMBER_OF_IMAGES; ++i)
 		{
 
-			getImageSize(IMAGE_NAMES[i]);
-			VkDeviceSize imageSize = texWidth * texHeight * 4;
+			getImageSize(IMAGE_NAMES[i], &IMAGE_WIDTH[i], &IMAGE_HEIGHT[i], &IMAGE_CHANNELS[i]);
+			VkDeviceSize imageSize = IMAGE_WIDTH[i] * IMAGE_HEIGHT[i] * 4;
 
 			if (!pixels) {
 				throw std::runtime_error("failed to load texture image!");
@@ -786,10 +795,10 @@ private:
 
 			stbi_image_free(pixels);
 
-			createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[i], textureImageMemory[i]);
+			createImage(IMAGE_WIDTH[i], IMAGE_HEIGHT[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage[i], textureImageMemory[i]);
 
 			transitionImageLayout(textureImage[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			copyBufferToImage(stagingBuffer, textureImage[i], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+			copyBufferToImage(stagingBuffer, textureImage[i], static_cast<uint32_t>(IMAGE_WIDTH[i]), static_cast<uint32_t>(IMAGE_HEIGHT[i]));
 			transitionImageLayout(textureImage[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 			vkDestroyBuffer(device, stagingBuffer, nullptr);
@@ -800,7 +809,7 @@ private:
 	void createTextureImageView() {
 		for (int i = 0; i < NUMBER_OF_IMAGES; ++i)
 		{
-			textureImageView[i] = createImageView(textureImage[i], VK_FORMAT_R8G8B8A8_SRGB);
+			textureImageView[i] = createImageView(&textureImage[i], VK_FORMAT_R8G8B8A8_SRGB);
 		}
 	}
 
@@ -827,10 +836,10 @@ private:
 		}
 	}
 
-	VkImageView createImageView(VkImage image, VkFormat format) {
+	VkImageView createImageView(VkImage* image, VkFormat format) {
 		VkImageViewCreateInfo viewInfo = {};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = image;
+		viewInfo.image = *image;
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewInfo.format = format;
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1254,7 +1263,7 @@ private:
 
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
-		ubo.iStampResolution = glm::vec2(LOGO_WIDTH, LOGO_HEIGHT);
+		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
 		ubo.iTime = time;
 
 		void* data;
@@ -1875,7 +1884,7 @@ int main() {
 		std::cin >> outputImageName;
 
 		IMAGE_NAMES[0] = imageName;
-		IMAGE_NAMES[1] = "Logo.png";
+		IMAGE_NAMES[1] = "Images/Logos/Logo.png";
 
 		app.run();
 	}
