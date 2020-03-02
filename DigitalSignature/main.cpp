@@ -646,17 +646,6 @@ private:
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 
-		//const bool flipvp = true;
-
-		/*// Flip the viewport http://anki3d.org/vulkan-coordinate-system/
-		//viewport.x = minx;
-		viewport.y = flipvp ? (HEIGHT- viewport.y) : viewport.y; // Move to the bottom;
-		//viewport.width = maxx - minx;
-		viewport.height = flipvp ? -HEIGHT : viewport.y - miny;
-		s.minDepth = 0.0;
-		s.maxDepth = 1.0;
-		vkCmdSetViewport(m_handle, 0, 1, &amp; s);*/
-
 		VkRect2D scissor = {};
 		scissor.offset = { 0, 0 };
 		scissor.extent = swapChainExtent;
@@ -1361,7 +1350,7 @@ private:
 
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
 		for (const auto& availableFormat : availableFormats) {
-			if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 				return availableFormat;
 			}
 		}
@@ -1780,7 +1769,8 @@ private:
 				}
 			}
 
-			stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 0);
+			//stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 0);
+			stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
 
 			delete swizzled;
 
