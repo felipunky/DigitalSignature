@@ -15,20 +15,23 @@
 #include <chrono>
 #include <vector>
 #include <cstring>
+#include <string>
 #include <cstdlib>
 #include <cstdint>
 #include <array>
 #include <optional>
 #include <set>
 
-int WIDTH = 800;
-int HEIGHT = 600;
+int WIDTH = 800, LOGO_WIDTH = 1024;
+int HEIGHT = 600, LOGO_HEIGHT = 1024;
 
 const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { "texture.jpg", "Logo.png" };
+std::string imageName, outputImageName;
+
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES];
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -80,6 +83,7 @@ struct UniformBufferObject
 {
 
 	glm::vec2 iResolution;
+	glm::vec2 iStampResolution;
 	float iTime;
 
 };
@@ -641,6 +645,17 @@ private:
 		viewport.height = (float)swapChainExtent.height;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
+
+		//const bool flipvp = true;
+
+		/*// Flip the viewport http://anki3d.org/vulkan-coordinate-system/
+		//viewport.x = minx;
+		viewport.y = flipvp ? (HEIGHT- viewport.y) : viewport.y; // Move to the bottom;
+		//viewport.width = maxx - minx;
+		viewport.height = flipvp ? -HEIGHT : viewport.y - miny;
+		s.minDepth = 0.0;
+		s.maxDepth = 1.0;
+		vkCmdSetViewport(m_handle, 0, 1, &amp; s);*/
 
 		VkRect2D scissor = {};
 		scissor.offset = { 0, 0 };
@@ -1250,6 +1265,7 @@ private:
 
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
+		ubo.iStampResolution = glm::vec2(LOGO_WIDTH, LOGO_HEIGHT);
 		ubo.iTime = time;
 
 		void* data;
@@ -1764,15 +1780,15 @@ private:
 				}
 			}
 
-			stbi_write_jpg("D:/Downloads/ImageTest/Test.png", WIDTH, HEIGHT, 4, swizzled, 0);
+			stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 0);
 
 			delete swizzled;
 
 		}
 
-		else {
+		/*else {
 			stbi_write_jpg("D:/Downloads/ImageTest/Test.png", WIDTH, HEIGHT, 4, data, 0);
-		}
+		}*/
 
 
 		/*std::ofstream file(path, std::ios::out | std::ios::binary);
@@ -1862,6 +1878,15 @@ int main() {
 	DigitalSignature app;
 
 	try {
+		std::cout << "Enter the path without quotations to the image you want to digitally sign" << std::endl;
+		std::cin >> imageName;
+
+		std::cout << "Enter the path without quotations where you want to output the signed image" << std::endl;
+		std::cin >> outputImageName;
+
+		IMAGE_NAMES[0] = imageName;
+		IMAGE_NAMES[1] = "Logo.png";
+
 		app.run();
 	}
 	catch (const std::exception& e) {
