@@ -235,6 +235,7 @@ private:
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 		//io.Fonts->AddFontFromFileTTF("../../Assets/Fonts/Roboto-Medium.ttf", 16.0f);
 		io.DisplaySize = ImVec2(width, height);
 		io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
@@ -276,7 +277,7 @@ private:
 
 		// render your GUI
 		ImGui::Begin("Thr34d5");
-		ImGui::InputInt("Save", &writeImage);
+		//ImGui::InputInt("Save", &writeImage);
 
 		/*ImGui::Text("Camera Position: (%f, %f, %f) ", mCamera->Position().x, mCamera->Position().y, mCamera->Position().z);
 		ImGui::Text("Camera Direction: (%f, %f, %f) ", mCamera->Direction().x, mCamera->Direction().y, mCamera->Direction().z);
@@ -296,6 +297,9 @@ private:
 		ImGui::End();
 		// Render dear imgui UI box into our window
 		ImGui::Render();
+
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
 	}
 
 	void recreateImGuiWindow() {
