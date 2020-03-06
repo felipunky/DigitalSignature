@@ -201,7 +201,7 @@ private:
 	uint32_t imageIndex = 0;
 
 	bool isImGuiWindowCreated = false;
-	int writeImage = 0;
+	bool writeImage = false;
 	bool framebufferResized = false;
 
 	void initWindow() {
@@ -277,6 +277,7 @@ private:
 
 		// render your GUI
 		ImGui::Begin("Thr34d5");
+		ImGui::Checkbox("Save", &writeImage);
 		//ImGui::InputInt("Save", &writeImage);
 
 		/*ImGui::Text("Camera Position: (%f, %f, %f) ", mCamera->Position().x, mCamera->Position().y, mCamera->Position().z);
@@ -1373,19 +1374,14 @@ private:
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-		if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
+		//if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
+		if (writeImage) {
 
 			auto color_file_name = "D:/Downloads/ImageTest/color.ppm";
 
 			SaveOutputColorTexture(color_file_name);
 
-			writeImage = true;
-		}
-
-		else {
-
 			writeImage = false;
-
 		}
 
 		UniformBufferObject ubo = {};
