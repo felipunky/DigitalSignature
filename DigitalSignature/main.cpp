@@ -278,23 +278,6 @@ private:
 		// render your GUI
 		ImGui::Begin("Thr34d5");
 		ImGui::Checkbox("Save", &writeImage);
-		//ImGui::InputInt("Save", &writeImage);
-
-		/*ImGui::Text("Camera Position: (%f, %f, %f) ", mCamera->Position().x, mCamera->Position().y, mCamera->Position().z);
-		ImGui::Text("Camera Direction: (%f, %f, %f) ", mCamera->Direction().x, mCamera->Direction().y, mCamera->Direction().z);
-		ImGui::Text("Projector Position: (%f, %f, %f) ", mProjector->Position().x, mProjector->Position().y, mProjector->Position().z);
-		ImGui::Text("Projector Direction: (%f, %f, %f) ", mProjector->Direction().x, mProjector->Direction().y, mProjector->Direction().z);
-
-		ImGui::InputFloat3("Projector Position", mProjectorPosition, 4);
-		if (ImGui::SliderFloat3("Projector Position", mProjectorPosition, -10.0f, 10.0f))
-		{
-			mProjector->SetPosition(glm::vec3(mProjectorPosition[0], mProjectorPosition[1], mProjectorPosition[2]));
-		}
-		ImGui::InputFloat3("Projector Direction", mProjectorDirection, 4);
-		if (ImGui::SliderFloat3("Projector Direction", mProjectorDirection, -100.0f, 100.0f))
-		{
-			mProjector->SetDirection(mProjectorDirection[0], mProjectorDirection[1], mProjectorDirection[2]);
-		}*/
 		ImGui::End();
 		// Render dear imgui UI box into our window
 		ImGui::Render();
