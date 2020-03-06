@@ -22,6 +22,10 @@
 #include <optional>
 #include <set>
 
+#include "imgui.h"
+#include "examples/imgui_impl_glfw.h"
+#include "examples/imgui_impl_vulkan.h"
+
 int WIDTH = 800;
 int HEIGHT = 600;
 
@@ -196,8 +200,8 @@ private:
 	size_t currentFrame = 0;
 	uint32_t imageIndex = 0;
 
-	bool writeImage = false;
-
+	bool isImGuiWindowCreated = false;
+	int writeImage = 0;
 	bool framebufferResized = false;
 
 	void initWindow() {
@@ -211,8 +215,8 @@ private:
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
 		GLFWimage images[2];
-		images[0].pixels = stbi_load("Images/Icons/WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
-		images[1].pixels = stbi_load("Images/Icons/WindowIcon_Small.png", &images[1].width, &images[1].height, 0, 4); 
+		images[0].pixels = stbi_load("Images\\Icons\\WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
+		images[1].pixels = stbi_load("Images\\Icons\\WindowIcon_Small.png", &images[1].width, &images[1].height, 0, 4); 
 		glfwSetWindowIcon(window, 1, images); 
 		stbi_image_free(images[0].pixels);
 		stbi_image_free(images[1].pixels);
@@ -220,7 +224,91 @@ private:
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 		auto app = reinterpret_cast<DigitalSignature*>(glfwGetWindowUserPointer(window));
+		auto io = ImGui::GetIO();
 		app->framebufferResized = true;
+	}
+
+	void initImGui(float width, float height) {
+		QueueFamilyIndices Indices = findQueueFamilies(physicalDevice);
+
+		// Setup Dear ImGui context
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		//io.Fonts->AddFontFromFileTTF("../../Assets/Fonts/Roboto-Medium.ttf", 16.0f);
+		io.DisplaySize = ImVec2(width, height);
+		io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+
+		// Setup Platform/Renderer bindings
+		ImGui_ImplGlfw_InitForVulkan(window, true);
+		ImGui_ImplVulkan_InitInfo init_info = {};
+		init_info.Instance = instance;
+		init_info.PhysicalDevice = physicalDevice;
+		init_info.Device = device;
+		init_info.QueueFamily = Indices.graphicsFamily.value();
+		init_info.Queue = presentQueue;
+		init_info.PipelineCache = VK_NULL_HANDLE;
+		init_info.DescriptorPool = descriptorPool;
+		init_info.Allocator = NULL;
+		init_info.MinImageCount = 2;
+		init_info.ImageCount = static_cast<uint32_t>(swapChainImages.size());
+		init_info.CheckVkResultFn = NULL;
+		ImGui_ImplVulkan_Init(&init_info, renderPass);
+
+		// Setup Dear ImGui style
+		ImGui::StyleColorsDark();
+
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+		ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+		endSingleTimeCommands(commandBuffer);
+		ImGui_ImplVulkan_DestroyFontUploadObjects();
+	}
+
+	void imGuiSetupWindow() {
+		// Start the Dear ImGui frame
+		ImGui_ImplVulkan_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+
+		auto WindowSize = ImVec2((float)swapChainExtent.width, (float)swapChainExtent.height);
+		ImGui::SetNextWindowSize(WindowSize, ImGuiCond_::ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
+		ImGui::NewFrame();
+
+		// render your GUI
+		ImGui::Begin("Thr34d5");
+		ImGui::InputInt("Save", &writeImage);
+
+		/*ImGui::Text("Camera Position: (%f, %f, %f) ", mCamera->Position().x, mCamera->Position().y, mCamera->Position().z);
+		ImGui::Text("Camera Direction: (%f, %f, %f) ", mCamera->Direction().x, mCamera->Direction().y, mCamera->Direction().z);
+		ImGui::Text("Projector Position: (%f, %f, %f) ", mProjector->Position().x, mProjector->Position().y, mProjector->Position().z);
+		ImGui::Text("Projector Direction: (%f, %f, %f) ", mProjector->Direction().x, mProjector->Direction().y, mProjector->Direction().z);
+
+		ImGui::InputFloat3("Projector Position", mProjectorPosition, 4);
+		if (ImGui::SliderFloat3("Projector Position", mProjectorPosition, -10.0f, 10.0f))
+		{
+			mProjector->SetPosition(glm::vec3(mProjectorPosition[0], mProjectorPosition[1], mProjectorPosition[2]));
+		}
+		ImGui::InputFloat3("Projector Direction", mProjectorDirection, 4);
+		if (ImGui::SliderFloat3("Projector Direction", mProjectorDirection, -100.0f, 100.0f))
+		{
+			mProjector->SetDirection(mProjectorDirection[0], mProjectorDirection[1], mProjectorDirection[2]);
+		}*/
+		ImGui::End();
+		// Render dear imgui UI box into our window
+		ImGui::Render();
+	}
+
+	void recreateImGuiWindow() {
+		if (!isImGuiWindowCreated)
+		{
+			ImGui_ImplVulkan_Shutdown();
+			ImGui_ImplGlfw_Shutdown();
+			ImGui::DestroyContext();
+			recreateSwapChain();
+			initImGui(float(swapChainExtent.width), float(swapChainExtent.height));
+			imGuiSetupWindow();
+			isImGuiWindowCreated = true;
+		}
 	}
 
 	void initVulkan() {
@@ -244,18 +332,27 @@ private:
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-		createCommandBuffers();
+		//createCommandBuffers();
 		createSyncObjects();
+		initImGui((float) WIDTH, (float) HEIGHT);
 	}
 
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
+			if (!isImGuiWindowCreated)
+			{
+				imGuiSetupWindow();
+				isImGuiWindowCreated = true;
+			}
+			createCommandBuffers();
 			updateUniformBuffer();
 			drawFrame();
 		}
-
 		vkDeviceWaitIdle(device);
+		ImGui_ImplVulkan_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
 	}
 
 	void cleanupSwapChain() {
@@ -598,6 +695,13 @@ private:
 		samplerLayoutBinding.pImmutableSamplers = nullptr;
 		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+		/*VkDescriptorSetLayoutBinding fontLayoutBinding = {};
+		fontLayoutBinding.binding = 2;
+		fontLayoutBinding.descriptorCount = 1;
+		fontLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		fontLayoutBinding.pImmutableSamplers = nullptr;
+		fontLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;*/
+
 		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -611,8 +715,8 @@ private:
 	}
 
 	void createGraphicsPipeline() {
-		auto vertShaderCode = readFile("Shaders/vert.spv");
-		auto fragShaderCode = readFile("Shaders/frag.spv");
+		auto vertShaderCode = readFile("Shaders\\vert.spv");
+		auto fragShaderCode = readFile("Shaders\\frag.spv");
 
 		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -1015,17 +1119,20 @@ private:
 	}
 
 	void createDescriptorPool() {
-        std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+        std::array<VkDescriptorPoolSize, 3> poolSizes = {};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 2;
+		// This Descriptor Pool is Used by ImGui
+		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
 
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size());
+        poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size()) + 1;
 
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
@@ -1077,6 +1184,15 @@ private:
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			descriptorWrites[1].descriptorCount = 2;
 			descriptorWrites[1].pImageInfo = imageInfo;
+			
+			// ImGui.
+			/*descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[2].dstSet = descriptorSets[i];
+			descriptorWrites[2].dstBinding = 2;
+			descriptorWrites[2].dstArrayElement = 0;
+			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[2].descriptorCount = 1;
+			descriptorWrites[2].pImageInfo = imgui_impl_vulkan;*/
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
@@ -1210,12 +1326,19 @@ private:
 
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
+			// Bind Dear Imgui pipeline to draw UI elements inside UI box
+			if (isImGuiWindowCreated)
+			{
+				ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers[i]);
+			}
+
 			vkCmdEndRenderPass(commandBuffers[i]);
 
 			if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
 				throw std::runtime_error("failed to record command buffer!");
 			}
 		}
+		isImGuiWindowCreated = false;
 	}
 
 	void createSyncObjects() {
@@ -1335,6 +1458,7 @@ private:
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
 			framebufferResized = false;
 			recreateSwapChain();
+			recreateImGuiWindow();
 		}
 		else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");

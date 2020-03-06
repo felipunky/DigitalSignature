@@ -15,7 +15,7 @@ layout(binding = 1) uniform sampler2D texSampler[2];
 layout( location = 0 ) in vec3 fragColor;
 layout( location = 0 ) out vec4 outColor;
 
-const float siz = 2.5;
+const float siz = 5.0;
 
 void main()
 { 
