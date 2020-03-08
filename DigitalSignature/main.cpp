@@ -34,6 +34,7 @@ const int NUMBER_OF_IMAGES = 2;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 std::string imageName, outputImageName;
+//std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
 
 std::string IMAGE_NAMES[NUMBER_OF_IMAGES];
 
@@ -200,9 +201,13 @@ private:
 	size_t currentFrame = 0;
 	uint32_t imageIndex = 0;
 
+	// ImGui.
 	bool isImGuiWindowCreated = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
+	// List box
+	const char* listbox_items[3] = { ".png", ".jpg", ".ppm" };
+	int fileFormat;
 
 	void initWindow() {
 		glfwInit();
@@ -235,6 +240,9 @@ private:
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
+		io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;  // We can create multi-viewports on the Renderer side (optional)
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 		//io.Fonts->AddFontFromFileTTF("../../Assets/Fonts/Roboto-Medium.ttf", 16.0f);
 		io.DisplaySize = ImVec2(width, height);
@@ -266,6 +274,7 @@ private:
 	}
 
 	void imGuiSetupWindow() {
+		ImGuiIO& io = ImGui::GetIO();
 		// Start the Dear ImGui frame
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -275,15 +284,25 @@ private:
 		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
 		ImGui::NewFrame();
 
+		//ImGui::ShowDemoWindow();
+
 		// render your GUI
 		ImGui::Begin("Thr34d5");
+
+		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 3, 4);
 		ImGui::Checkbox("Save", &writeImage);
+		
 		ImGui::End();
 		// Render dear imgui UI box into our window
 		ImGui::Render();
-
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
+		/*if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+			GLFWwindow* backupCurrentContext = glfwGetCurrentContext();
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
+			glfwMakeContextCurrent(backupCurrentContext);
+		}*/
 	}
 
 	void recreateImGuiWindow() {
@@ -371,7 +390,7 @@ private:
 	void cleanup() {
 		cleanupSwapChain();
 
-		for (int i = 0; i < NUMBER_OF_IMAGES; ++i) {
+		for (size_t i = 0; i < NUMBER_OF_IMAGES; ++i) {
 			vkDestroySampler(device, textureSampler[i], nullptr);
 			vkDestroyImageView(device, textureImageView[i], nullptr);
 
@@ -586,7 +605,7 @@ private:
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
 		createInfo.imageExtent = extent;
 		createInfo.imageArrayLayers = 1;
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 		uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
@@ -774,6 +793,7 @@ private:
 		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
 		VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+		// Original.
 		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		colorBlendAttachment.blendEnable = VK_TRUE;
 		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -782,6 +802,15 @@ private:
 		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_SUBTRACT;
+		// For ImGui.
+		/*colorBlendAttachment.blendEnable = VK_TRUE;
+		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;*/
 
 		VkPipelineColorBlendStateCreateInfo colorBlending = {};
 		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1224,7 +1253,21 @@ private:
 
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+		beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+		/*if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+			VkCommandBufferInheritanceInfo inheritanceInfo;
+			inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+			inheritanceInfo.pNext = nullptr;
+			inheritanceInfo.renderPass = renderPass;
+			inheritanceInfo.subpass = 0;
+			inheritanceInfo.occlusionQueryEnable = VK_FALSE;
+			inheritanceInfo.framebuffer = VK_NULL_HANDLE;
+			inheritanceInfo.pipelineStatistics = 0;
+			inheritanceInfo.queryFlags = 0;
+
+			beginInfo.pInheritanceInfo = &inheritanceInfo;
+		}*/
 
 		vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
@@ -1360,9 +1403,7 @@ private:
 		//if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
 		if (writeImage) {
 
-			auto color_file_name = "D:/Downloads/ImageTest/color.ppm";
-
-			SaveOutputColorTexture(color_file_name);
+			SaveOutputColorTexture();
 
 			writeImage = false;
 		}
@@ -1653,7 +1694,7 @@ private:
 		return VK_FALSE;
 	}
 
-	void SaveOutputColorTexture(const std::string& path)
+	void SaveOutputColorTexture()
 	{
 
 		bool supportsBlit = true;
@@ -1874,6 +1915,7 @@ private:
 			unsigned char* swizzled = new unsigned char[WIDTH * HEIGHT * 4];
 			int offset = 0, iter = 0;
 
+
 			for (int y = HEIGHT - 1; y >= 0; y--)
 			{
 				for (int x = 0; x < WIDTH; x++)
@@ -1885,58 +1927,74 @@ private:
 				}
 			}
 
-			//stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 0);
-			stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
-
-			delete swizzled;
-
-		}
-
-		/*else {
-			stbi_write_jpg("D:/Downloads/ImageTest/Test.png", WIDTH, HEIGHT, 4, data, 0);
-		}*/
-
-
-		/*std::ofstream file(path, std::ios::out | std::ios::binary);
-
-		// ppm header
-		file << "P6\n" << WIDTH << "\n" << HEIGHT << "\n" << 255 << "\n";
-
-		// If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
-		bool colorSwizzle = false;
-		// Check if source is BGR
-		// Note: Not complete, only contains most common and basic BGR surface formats for demonstation purposes
-		if (!supportsBlit)
-		{
-			std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
-			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
-		}
-
-		for (uint32_t y = 0; y < HEIGHT; y++)
-		{
-			unsigned int *row = (unsigned int*)data;
-			for (uint32_t x = 0; x < WIDTH; x++)
-			{
-				if (colorSwizzle)
+			/*if (IMAGE_CHANNELS[0] == 3) {
+				for (int y = HEIGHT - 1; y >= 0; y--)
 				{
-					const char* r = (char*)row + 2;
-					const char* g = (char*)row + 1;
-					const char* b = (char*)row;
+					for (int x = 0; x < WIDTH; x++)
+					{
+						swizzled[(x + y * WIDTH) * 4] = data[(x + y * WIDTH) * 4 + 2];
+						swizzled[(x + y * WIDTH) * 4 + 1] = data[(x + y * WIDTH) * 4 + 1];
+						swizzled[(x + y * WIDTH) * 4 + 2] = data[(x + y * WIDTH) * 4];
+					}
+				}
+			}*/
 
-					file.write(r, 1);
-					file.write(g, 1);
-					file.write(b, 1);
-				}
-				else
-				{
-					file.write((char*)row, 3);
-				}
-				row++;
+			std::string tempOutImageName;// = "Images\\Test.png";
+			//stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
+			if (fileFormat == 0) {
+				tempOutImageName = outputImageName + listbox_items[0];
+				stbi_write_png(tempOutImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
 			}
-			data += subResourceLayout.rowPitch;
+			else if (fileFormat == 1) {
+				tempOutImageName = outputImageName + listbox_items[1];
+				stbi_write_jpg(tempOutImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 100);
+			}
+			delete swizzled;
 		}
 
-		file.close();*/
+		if (fileFormat == 2) {
+			std::string tempOutImageName;
+			tempOutImageName = outputImageName + listbox_items[2];
+			std::ofstream file(tempOutImageName, std::ios::out | std::ios::binary);
+
+			// ppm header
+			file << "P6\n" << WIDTH << "\n" << HEIGHT << "\n" << 255 << "\n";
+
+			// If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
+			bool colorSwizzle = false;
+			// Check if source is BGR
+			// Note: Not complete, only contains most common and basic BGR surface formats for demonstation purposes
+			if (!supportsBlit)
+			{
+				std::vector<VkFormat> formatsBGR = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SNORM };
+				colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
+			}
+
+			for (uint32_t y = 0; y < HEIGHT; y++)
+			{
+				unsigned int *row = (unsigned int*)data;
+				for (uint32_t x = 0; x < WIDTH; x++)
+				{
+					if (colorSwizzle)
+					{
+						const char* r = (char*)row + 2;
+						const char* g = (char*)row + 1;
+						const char* b = (char*)row;
+
+						file.write(r, 1);
+						file.write(g, 1);
+						file.write(b, 1);
+					}
+					else
+					{
+						file.write((char*)row, 3);
+					}
+					row++;
+				}
+				data += subResourceLayout.rowPitch;
+			}
+			file.close();
+		}
 
 		std::cout << "Screenshot saved to disk" << std::endl;
 
