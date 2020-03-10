@@ -13,7 +13,7 @@ Mesh created using the [GHopperGIS](https://www.food4rhino.com/app/ghoppergis) p
 
 It's written in C++ and the image manipulation is done through shaders using the [Vulkan](https://www.khronos.org/vulkan/) API. The GUI is written using the [ImGui](https://github.com/ocornut/imgui) library.
 
-Thanks to [Vulkan Tutorial](https://vulkan-tutorial.com/) for the amazing tutorial on the graphics API, to github user [planetpratik](https://github.com/planetpratik) for getting me to understand how to integrate ImGui with Vulkan and to (Sascha)[https://github.com/SaschaWillems] for his amazing examples.
+Thanks to [Vulkan Tutorial](https://vulkan-tutorial.com/) for the amazing tutorial on the graphics API, to github user [planetpratik](https://github.com/planetpratik) for getting me to understand how to integrate ImGui with Vulkan and to [Sascha](https://github.com/SaschaWillems) for his amazing examples.
 
 ## How to
 Go to [this](https://github.com/felipunky/DigitalSignature/releases) page, download the latest .exe file. Run it.
