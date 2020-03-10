@@ -96,6 +96,7 @@ struct UniformBufferObject
 	glm::vec2 iResolution;
 	glm::vec2 iStampResolution;
 	float iSize;
+	float iAlpha;
 	float iTime;
 
 };
@@ -217,7 +218,7 @@ private:
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
-	float sizeMultiplier = 5.0;
+	float sizeMultiplier = 5.0, transparency = 0.1;
     std::string tempOutImageName;
 	// List box
 	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
@@ -312,7 +313,8 @@ private:
 		if (ImGui::Button("Change image")) {
 			changeImage = true;
 		}
-		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f, 1.0f");
+		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("Alpha", &transparency, 0.0, 1.0, "%.3f", 1.0f);
 		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
 		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 5, 4);
 		tempOutImageName = outputImageName + listbox_items[fileFormat];
@@ -1438,6 +1440,7 @@ private:
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
 		ubo.iSize = sizeMultiplier;
+		ubo.iAlpha = transparency;
 		ubo.iTime = time;
 
 		void* data;

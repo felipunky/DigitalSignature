@@ -7,6 +7,7 @@ layout( binding = 0 ) uniform UniformBufferObject
 	vec2 iResolution;
 	vec2 iStampResolution;
 	float iSize;
+	float iAlpha;
 	float iTime;
 
 } ubo;
@@ -33,7 +34,7 @@ void main()
 	vec4 digitalStamp = texture( texSampler[1], uvStamp ); 
 
     //if( digitalStamp.a > 0.0 && uvStamp.y < xy && uvStamp.x > -xy )
-	if( digitalStamp.a > 0.0 && uvStamp.y > -1.0 && uvStamp.x > -1.0 )
+	if( digitalStamp.a > ubo.iAlpha && uvStamp.y > -1.0 && uvStamp.x > -1.0 )
     {
 
 		col = digitalStamp;
