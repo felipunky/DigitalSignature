@@ -39,4 +39,5 @@ The UI is very intuitive, but just in case:
 5. Save As: Again defaults to where the app is installed, feel free to change it anywhere on your system.
 6. File format: Let's you pick the type of file you want to save it to.
 7. Save: I don't think I have to explain this one.
+
 *Watchout for the UI appearing on the images you save, undock the UI from the main app window simply by dragging it out. If the image is very large and you don't have enough space on the screen (and you don't want to mess the aspect ratio by going full-screen), simply set the main window to the side, the image save doesn't rely on what you are actually seeing on the screen.
