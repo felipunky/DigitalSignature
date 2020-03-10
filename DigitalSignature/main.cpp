@@ -23,6 +23,7 @@
 #include <set>
 
 #include "imgui.h"
+#include "misc/cpp/imgui_stdlib.h"
 #include "examples/imgui_impl_glfw.h"
 #include "examples/imgui_impl_vulkan.h"
 
@@ -33,10 +34,10 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-std::string imageName, outputImageName;
+std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
 //std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES];
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, "Images/Logos/Logo.png" };
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -84,11 +85,12 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
-struct UniformBufferObject 
+struct UniformBufferObject
 {
 
 	glm::vec2 iResolution;
 	glm::vec2 iStampResolution;
+	float iSize;
 	float iTime;
 
 };
@@ -142,6 +144,10 @@ public:
 		initVulkan();
 		mainLoop();
 		cleanup();
+		if (changeImage) {
+			changeImageName();
+			changeImage = false;
+		}
 	}
 
 private:
@@ -163,7 +169,7 @@ private:
 	VkExtent2D swapChainExtent;
 	std::vector<VkImageView> swapChainImageViews;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
-	
+
 	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
@@ -171,8 +177,8 @@ private:
 
 	VkCommandPool commandPool;
 
-	int IMAGE_WIDTH[NUMBER_OF_IMAGES] = { 0, 0 }, 
-		IMAGE_HEIGHT[NUMBER_OF_IMAGES] = { 0, 0 }, 
+	int IMAGE_WIDTH[NUMBER_OF_IMAGES] = { 0, 0 },
+		IMAGE_HEIGHT[NUMBER_OF_IMAGES] = { 0, 0 },
 		IMAGE_CHANNELS[NUMBER_OF_IMAGES] = { 0, 0 };
 	stbi_uc* pixels;
 
@@ -203,8 +209,10 @@ private:
 
 	// ImGui.
 	bool isImGuiWindowCreated = false;
+	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
+	float sizeMultiplier = 5.0;
 	// List box
 	const char* listbox_items[3] = { ".png", ".jpg", ".ppm" };
 	int fileFormat;
@@ -221,8 +229,8 @@ private:
 
 		GLFWimage images[2];
 		images[0].pixels = stbi_load("Images\\Icons\\WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
-		images[1].pixels = stbi_load("Images\\Icons\\WindowIcon_Small.png", &images[1].width, &images[1].height, 0, 4); 
-		glfwSetWindowIcon(window, 1, images); 
+		images[1].pixels = stbi_load("Images\\Icons\\WindowIcon_Small.png", &images[1].width, &images[1].height, 0, 4);
+		glfwSetWindowIcon(window, 1, images);
 		stbi_image_free(images[0].pixels);
 		stbi_image_free(images[1].pixels);
 	}
@@ -296,9 +304,17 @@ private:
 		// render your GUI
 		ImGui::Begin("Thr34d5");
 
+		bool inputImage = ImGui::InputText("Path to Image", &imageName);
+		if (ImGui::Button("Change image")) {
+			changeImage = true;
+		}
+		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f, 1.0f");
+		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
 		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 3, 4);
-		ImGui::Checkbox("Save", &writeImage);
-		
+		if (ImGui::Button("Save")) {
+			writeImage = true;
+		}
+
 		ImGui::End();
 		// Render dear imgui UI box into our window
 		ImGui::Render();
@@ -306,10 +322,10 @@ private:
 		// Update and Render additional Platform Windows
 		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 		{
-			GLFWwindow* backup_current_context = glfwGetCurrentContext();
+			//GLFWwindow* backup_current_context = glfwGetCurrentContext();
 			ImGui::UpdatePlatformWindows();
 			ImGui::RenderPlatformWindowsDefault();
-			glfwMakeContextCurrent(backup_current_context);
+			//glfwMakeContextCurrent(backup_current_context);
 		}
 	}
 
@@ -349,11 +365,11 @@ private:
 		createDescriptorSets();
 		//createCommandBuffers();
 		createSyncObjects();
-		initImGui((float) WIDTH, (float) HEIGHT);
+		initImGui(float(swapChainExtent.width), float(swapChainExtent.height));
 	}
 
 	void mainLoop() {
-		while (!glfwWindowShouldClose(window)) {
+		while (!glfwWindowShouldClose(window) && !changeImage) {
 			glfwPollEvents();
 			if (!isImGuiWindowCreated)
 			{
@@ -445,7 +461,6 @@ private:
 		}
 
 		vkDeviceWaitIdle(device);
-
 		cleanupSwapChain();
 
 		createSwapChain();
@@ -726,7 +741,7 @@ private:
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create descriptor set layout!");
 		}
-	
+
 	}
 
 	void createGraphicsPipeline() {
@@ -1144,25 +1159,25 @@ private:
 	}
 
 	void createDescriptorPool() {
-        std::array<VkDescriptorPoolSize, 3> poolSizes = {};
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
-        poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 2;
+		std::array<VkDescriptorPoolSize, 3> poolSizes = {};
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 2;
 		// This Descriptor Pool is Used by ImGui
 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
 
-        VkDescriptorPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-        poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size()) + 1;
+		VkDescriptorPoolCreateInfo poolInfo = {};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		poolInfo.pPoolSizes = poolSizes.data();
+		poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size()) + 1;
 
-        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create descriptor pool!");
-        }
-    }
+		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor pool!");
+		}
+	}
 
 	void createDescriptorSets() {
 		std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), descriptorSetLayout);
@@ -1172,7 +1187,7 @@ private:
 		allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChainImages.size());
 		allocInfo.pSetLayouts = layouts.data();
 		descriptorSets.resize(swapChainImages.size());
-		
+
 		if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
 			throw std::runtime_error("failed to allocate descriptor sets!");
 		}
@@ -1209,7 +1224,7 @@ private:
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			descriptorWrites[1].descriptorCount = 2;
 			descriptorWrites[1].pImageInfo = imageInfo;
-			
+
 			// ImGui.
 			/*descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[2].dstSet = descriptorSets[i];
@@ -1407,18 +1422,16 @@ private:
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-		//if (glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS) {
-		if (writeImage) {
-
+		 
+		if (writeImage || glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
 			SaveOutputColorTexture();
-
 			writeImage = false;
 		}
 
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
+		ubo.iSize = sizeMultiplier;
 		ubo.iTime = time;
 
 		void* data;
@@ -1438,6 +1451,7 @@ private:
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 			recreateSwapChain();
+			recreateImGuiWindow();
 			return;
 		}
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
@@ -1735,8 +1749,8 @@ private:
 		imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
 		// Note that vkCmdBlitImage (if supported) will also do format conversions if the swapchain color format would differ
 		imageCreateCI.format = swapChainImageFormat;
-		imageCreateCI.extent.width = WIDTH;
-		imageCreateCI.extent.height = HEIGHT;
+		imageCreateCI.extent.width = swapChainExtent.width;
+		imageCreateCI.extent.height = swapChainExtent.height;
 		imageCreateCI.extent.depth = 1;
 		imageCreateCI.arrayLayers = 1;
 		imageCreateCI.mipLevels = 1;
@@ -1829,8 +1843,8 @@ private:
 		{
 			// Define the region to blit (we will blit the whole swapchain image)
 			VkOffset3D blitSize;
-			blitSize.x = WIDTH;
-			blitSize.y = HEIGHT;
+			blitSize.x = swapChainExtent.width;
+			blitSize.y = swapChainExtent.height;
 			blitSize.z = 1;
 			VkImageBlit imageBlitRegion{};
 			imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1857,8 +1871,8 @@ private:
 			imageCopyRegion.srcSubresource.layerCount = 1;
 			imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			imageCopyRegion.dstSubresource.layerCount = 1;
-			imageCopyRegion.extent.width = WIDTH;
-			imageCopyRegion.extent.height = HEIGHT;
+			imageCopyRegion.extent.width = swapChainExtent.width;
+			imageCopyRegion.extent.height = swapChainExtent.height;
 			imageCopyRegion.extent.depth = 1;
 
 			// Issue the copy command
@@ -1904,7 +1918,7 @@ private:
 		vkGetImageSubresourceLayout(device, dstImage, &subResource, &subResourceLayout);
 
 		// Map image memory so we can start copying from it
-	    unsigned char* data;
+		unsigned char* data;
 		vkMapMemory(device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
 		data += subResourceLayout.offset;
 
@@ -1920,42 +1934,36 @@ private:
 
 		if (colorSwizzle) {
 
-			unsigned char* swizzled = new unsigned char[WIDTH * HEIGHT * 4];
+			unsigned char* swizzled = new unsigned char[swapChainExtent.width * swapChainExtent.height * 4];
 			int offset = 0, iter = 0;
 
-
-			for (int y = HEIGHT - 1; y >= 0; y--)
+			for (uint32_t y = 0; y < swapChainExtent.height; y++)
 			{
-				for (int x = 0; x < WIDTH; x++)
+				unsigned int *row = (unsigned int*)data;
+				for (uint32_t x = 0; x < swapChainExtent.width; x++)
 				{
-					swizzled[(x + y * WIDTH) * 4] = data[(x + y * WIDTH) * 4 + 2];
-					swizzled[(x + y * WIDTH) * 4 + 1] = data[(x + y * WIDTH) * 4 + 1];
-					swizzled[(x + y * WIDTH) * 4 + 2] = data[(x + y * WIDTH) * 4];
-					swizzled[(x + y * WIDTH) * 4 + 3] = data[(x + y * WIDTH) * 4 + 3];
+
+					int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
+						A = B + 1;
+
+					swizzled[R] = *((unsigned char*)row + 2);
+					swizzled[G] = *((unsigned char*)row + 1);
+					swizzled[B] = *((unsigned char*)row);
+					swizzled[A] = *((unsigned char*)row + 3);
+
+					row++;
 				}
+				data += subResourceLayout.rowPitch;
 			}
 
-			/*if (IMAGE_CHANNELS[0] == 3) {
-				for (int y = HEIGHT - 1; y >= 0; y--)
-				{
-					for (int x = 0; x < WIDTH; x++)
-					{
-						swizzled[(x + y * WIDTH) * 4] = data[(x + y * WIDTH) * 4 + 2];
-						swizzled[(x + y * WIDTH) * 4 + 1] = data[(x + y * WIDTH) * 4 + 1];
-						swizzled[(x + y * WIDTH) * 4 + 2] = data[(x + y * WIDTH) * 4];
-					}
-				}
-			}*/
-
-			std::string tempOutImageName;// = "Images\\Test.png";
-			//stbi_write_png(outputImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
+			std::string tempOutImageName;
 			if (fileFormat == 0) {
 				tempOutImageName = outputImageName + listbox_items[0];
-				stbi_write_png(tempOutImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, WIDTH * 4);
+				stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, swapChainExtent.width * 4);
 			}
 			else if (fileFormat == 1) {
 				tempOutImageName = outputImageName + listbox_items[1];
-				stbi_write_jpg(tempOutImageName.c_str(), WIDTH, HEIGHT, 4, swizzled, 100);
+				stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, 100);
 			}
 			delete swizzled;
 		}
@@ -1966,7 +1974,7 @@ private:
 			std::ofstream file(tempOutImageName, std::ios::out | std::ios::binary);
 
 			// ppm header
-			file << "P6\n" << WIDTH << "\n" << HEIGHT << "\n" << 255 << "\n";
+			file << "P6\n" << swapChainExtent.width << "\n" << swapChainExtent.height << "\n" << 255 << "\n";
 
 			// If source is BGR (destination is always RGB) and we can't use blit (which does automatic conversion), we'll have to manually swizzle color components
 			bool colorSwizzle = false;
@@ -1978,10 +1986,10 @@ private:
 				colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
 			}
 
-			for (uint32_t y = 0; y < HEIGHT; y++)
+			for (uint32_t y = 0; y < swapChainExtent.height; y++)
 			{
 				unsigned int *row = (unsigned int*)data;
-				for (uint32_t x = 0; x < WIDTH; x++)
+				for (uint32_t x = 0; x < swapChainExtent.width; x++)
 				{
 					if (colorSwizzle)
 					{
@@ -2044,21 +2052,19 @@ private:
 			0, nullptr,
 			1, &imageMemoryBarrier);
 	}
+
+	void changeImageName() {
+		glfwDestroyWindow(window);
+		IMAGE_NAMES[0] = imageName;
+		DigitalSignature app;
+		app.run();
+	}
 };
 
 int main() {
 	DigitalSignature app;
 
 	try {
-		std::cout << "Enter the path without quotations to the image you want to digitally sign" << std::endl;
-		std::cin >> imageName;
-
-		std::cout << "Enter the path without quotations where you want to output the signed image" << std::endl;
-		std::cin >> outputImageName;
-
-		IMAGE_NAMES[0] = imageName;
-		IMAGE_NAMES[1] = "Images/Logos/Logo.png";
-
 		app.run();
 	}
 	catch (const std::exception& e) {

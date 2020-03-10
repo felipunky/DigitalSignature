@@ -6,6 +6,7 @@ layout( binding = 0 ) uniform UniformBufferObject
 
 	vec2 iResolution;
 	vec2 iStampResolution;
+	float iSize;
 	float iTime;
 
 } ubo;
@@ -15,7 +16,7 @@ layout(binding = 1) uniform sampler2D texSampler[2];
 layout( location = 0 ) in vec3 fragColor;
 layout( location = 0 ) out vec4 outColor;
 
-const float siz = 5.0;
+//const float siz = 5.0;
 
 void main()
 { 
@@ -26,7 +27,7 @@ void main()
 	vec2 uv = fragCoord / iResolution;
 	vec2 uvStamp = fragCoord / iStampResolution;
 	uvStamp.x -= 1.0 / ( uv.x / uvStamp.x );
-    uvStamp *= siz;
+    uvStamp *= ubo.iSize;//siz;
     
     vec4 col = texture( texSampler[0], uv );
 	vec4 digitalStamp = texture( texSampler[1], uvStamp ); 

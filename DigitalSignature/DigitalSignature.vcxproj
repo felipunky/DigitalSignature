@@ -159,6 +159,7 @@
     <ClCompile Include="..\..\..\Programas\GUI\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\..\..\Programas\GUI\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\..\Programas\GUI\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\..\..\Programas\GUI\imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -171,6 +172,7 @@
     <ClInclude Include="..\..\..\Programas\GUI\imgui\imconfig.h" />
     <ClInclude Include="..\..\..\Programas\GUI\imgui\imgui.h" />
     <ClInclude Include="..\..\..\Programas\GUI\imgui\imgui_internal.h" />
+    <ClInclude Include="..\..\..\Programas\GUI\imgui\misc\cpp\imgui_stdlib.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
