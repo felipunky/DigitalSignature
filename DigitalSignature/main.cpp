@@ -1932,40 +1932,55 @@ private:
 			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
 		}
 
-		if (colorSwizzle) {
+		if (fileFormat == 0 || fileFormat == 1) {
 
-			unsigned char* swizzled = new unsigned char[swapChainExtent.width * swapChainExtent.height * 4];
-			int offset = 0, iter = 0;
+			if (colorSwizzle) {
 
-			for (uint32_t y = 0; y < swapChainExtent.height; y++)
-			{
-				unsigned int *row = (unsigned int*)data;
-				for (uint32_t x = 0; x < swapChainExtent.width; x++)
+				unsigned char* swizzled = new unsigned char[swapChainExtent.width * swapChainExtent.height * 4];
+				int offset = 0, iter = 0;
+
+				for (uint32_t y = 0; y < swapChainExtent.height; y++)
 				{
+					unsigned int *row = (unsigned int*)data;
+					for (uint32_t x = 0; x < swapChainExtent.width; x++)
+					{
 
-					int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
-						A = B + 1;
+						int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
+							A = B + 1;
 
-					swizzled[R] = *((unsigned char*)row + 2);
-					swizzled[G] = *((unsigned char*)row + 1);
-					swizzled[B] = *((unsigned char*)row);
-					swizzled[A] = *((unsigned char*)row + 3);
+						swizzled[R] = *((unsigned char*)row + 2);
+						swizzled[G] = *((unsigned char*)row + 1);
+						swizzled[B] = *((unsigned char*)row);
+						swizzled[A] = *((unsigned char*)row + 3);
 
-					row++;
+						row++;
+					}
+					data += subResourceLayout.rowPitch;
 				}
-				data += subResourceLayout.rowPitch;
+
+				std::string tempOutImageName;
+				if (fileFormat == 0) {
+					tempOutImageName = outputImageName + listbox_items[0];
+					stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, swapChainExtent.width * 4);
+				}
+				else if (fileFormat == 1) {
+					tempOutImageName = outputImageName + listbox_items[1];
+					stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, 100);
+				}
+				delete swizzled;
 			}
 
-			std::string tempOutImageName;
-			if (fileFormat == 0) {
-				tempOutImageName = outputImageName + listbox_items[0];
-				stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, swapChainExtent.width * 4);
+			else {
+				std::string tempOutImageName;
+				if (fileFormat == 0) {
+					tempOutImageName = outputImageName + listbox_items[0];
+					stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data, swapChainExtent.width * 4);
+				}
+				else if (fileFormat == 1) {
+					tempOutImageName = outputImageName + listbox_items[1];
+					stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data, 100);
+				}
 			}
-			else if (fileFormat == 1) {
-				tempOutImageName = outputImageName + listbox_items[1];
-				stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, 100);
-			}
-			delete swizzled;
 		}
 
 		if (fileFormat == 2) {
