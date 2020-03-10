@@ -27,7 +27,7 @@ Choose where you want it to install.
 Open the folder where it installed and click on the .exe.
 
 ![SetupThr34d5_2](https://user-images.githubusercontent.com/21000020/76343262-d9cb0480-62cd-11ea-86a7-9c4f3299c067.JPG)
-WebGL shader [Not Our Home](https://felipunky.github.io/html/FuqueneUno.html) by me. *Disclaimer: don't run if you don't have a beefy GPU.
+Screenshot of pixel shader [Not Our Home](https://felipunky.github.io/html/FuqueneUno.html) by me. *Disclaimer: don't run if you don't have a beefy GPU.
 
 The UI is very intuitive, but just in case: 
 1. Path to Image: It defaults to the folder where it is installed, feel free to change it to any image file in your computer.
