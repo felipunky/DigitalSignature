@@ -23,6 +23,7 @@ Go to [this](https://github.com/felipunky/DigitalSignature/releases) page, downl
 Choose where you want it to install.
 
 ![SetupThr34d5_1](https://user-images.githubusercontent.com/21000020/76343054-8953a700-62cd-11ea-94dd-631c323aeebf.JPG)
+
 Open the folder where it installed and click on the .exe.
 
 ![SetupThr34d5_2](https://user-images.githubusercontent.com/21000020/76343262-d9cb0480-62cd-11ea-86a7-9c4f3299c067.JPG)
