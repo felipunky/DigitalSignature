@@ -27,6 +27,12 @@
 #include "examples/imgui_impl_glfw.h"
 #include "examples/imgui_impl_vulkan.h"
 
+#define ARRAYSIZE(a) \
+  ((sizeof(a) / sizeof(*(a))) / \
+  static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
+
+#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+
 int WIDTH = 800;
 int HEIGHT = 600;
 
@@ -35,9 +41,8 @@ const int NUMBER_OF_IMAGES = 2;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
-//std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, "Images/Logos/Logo.png" };
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, "Images\\Logos\\Logo.png" };
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -213,8 +218,9 @@ private:
 	bool writeImage = false;
 	bool framebufferResized = false;
 	float sizeMultiplier = 5.0;
+    std::string tempOutImageName;
 	// List box
-	const char* listbox_items[3] = { ".png", ".jpg", ".ppm" };
+	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
 	int fileFormat;
 
 	void initWindow() {
@@ -299,8 +305,6 @@ private:
 		ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_::ImGuiCond_FirstUseEver);
 		ImGui::NewFrame();
 
-		//ImGui::ShowDemoWindow();
-
 		// render your GUI
 		ImGui::Begin("Thr34d5");
 
@@ -310,7 +314,9 @@ private:
 		}
 		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f, 1.0f");
 		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
-		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 3, 4);
+		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 5, 4);
+		tempOutImageName = outputImageName + listbox_items[fileFormat];
+		ImGui::Text(tempOutImageName.c_str());
 		if (ImGui::Button("Save")) {
 			writeImage = true;
 		}
@@ -1932,19 +1938,14 @@ private:
 			colorSwizzle = (std::find(formatsBGR.begin(), formatsBGR.end(), swapChainImageFormat) != formatsBGR.end());
 		}
 
-		if (fileFormat == 0 || fileFormat == 1) {
-
+		if (fileFormat == 0 || fileFormat == 1 || fileFormat == 3 || fileFormat == 4) {
 			if (colorSwizzle) {
-
 				unsigned char* swizzled = new unsigned char[swapChainExtent.width * swapChainExtent.height * 4];
-				int offset = 0, iter = 0;
-
 				for (uint32_t y = 0; y < swapChainExtent.height; y++)
 				{
 					unsigned int *row = (unsigned int*)data;
 					for (uint32_t x = 0; x < swapChainExtent.width; x++)
 					{
-
 						int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
 							A = B + 1;
 
@@ -1957,35 +1958,80 @@ private:
 					}
 					data += subResourceLayout.rowPitch;
 				}
-
-				std::string tempOutImageName;
 				if (fileFormat == 0) {
-					tempOutImageName = outputImageName + listbox_items[0];
+					//tempOutImageName = outputImageName + listbox_items[0];
 					stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, swapChainExtent.width * 4);
 				}
 				else if (fileFormat == 1) {
-					tempOutImageName = outputImageName + listbox_items[1];
+					//tempOutImageName = outputImageName + listbox_items[1];
 					stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled, 100);
+				}
+				else if (fileFormat == 3) {
+					//tempOutImageName = outputImageName + listbox_items[3];
+					stbi_write_bmp(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled);
+				}
+				else if (fileFormat == 4) {
+					//tempOutImageName = outputImageName + listbox_items[4];
+					stbi_write_tga(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzled);
 				}
 				delete swizzled;
 			}
 
 			else {
-				std::string tempOutImageName;
 				if (fileFormat == 0) {
-					tempOutImageName = outputImageName + listbox_items[0];
+					//tempOutImageName = outputImageName + listbox_items[0];
 					stbi_write_png(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data, swapChainExtent.width * 4);
 				}
 				else if (fileFormat == 1) {
-					tempOutImageName = outputImageName + listbox_items[1];
+					//tempOutImageName = outputImageName + listbox_items[1];
 					stbi_write_jpg(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data, 100);
+				}
+				else if (fileFormat == 3) {
+					//tempOutImageName = outputImageName + listbox_items[3];
+					stbi_write_bmp(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data);
+				}
+				else if (fileFormat == 4) {
+					//tempOutImageName = outputImageName + listbox_items[4];
+					stbi_write_tga(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, data);
 				}
 			}
 		}
 
-		if (fileFormat == 2) {
+		/*else if (fileFormat == 5) {
+			float* swizzledFloat = new float[swapChainExtent.width * swapChainExtent.height * 4];
+			for (uint32_t y = 0; y < swapChainExtent.height; y++)
+			{
+				unsigned int *row = (unsigned int*)data;
+				for (uint32_t x = 0; x < swapChainExtent.width; x++)
+				{
+					int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
+						A = B + 1;
+					if (colorSwizzle) {
+						swizzledFloat[R] = (float)*((unsigned char*)row + 2);
+						swizzledFloat[G] = (float)*((unsigned char*)row + 1);
+						swizzledFloat[B] = (float)*((unsigned char*)row);
+						swizzledFloat[A] = (float)*((unsigned char*)row + 3);
+					}
+					else {
+						swizzledFloat[R] = *((unsigned char*)row);
+						swizzledFloat[G] = *((unsigned char*)row + 1);
+						swizzledFloat[B] = *((unsigned char*)row + 2);
+						swizzledFloat[A] = *((unsigned char*)row + 3);
+					}
+					row++;
+				}
+				data += subResourceLayout.rowPitch;
+			}
+
 			std::string tempOutImageName;
-			tempOutImageName = outputImageName + listbox_items[2];
+			tempOutImageName = outputImageName + listbox_items[5];
+			stbi_write_hdr(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzledFloat);
+			delete swizzledFloat;
+		}*/
+
+		else if (fileFormat == 2) {
+			//std::string tempOutImageName;
+			//tempOutImageName = outputImageName + listbox_items[2];
 			std::ofstream file(tempOutImageName, std::ios::out | std::ios::binary);
 
 			// ppm header
@@ -2026,7 +2072,6 @@ private:
 			}
 			file.close();
 		}
-
 		std::cout << "Screenshot saved to disk" << std::endl;
 
 		// Clean up resources
