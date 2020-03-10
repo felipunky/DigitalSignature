@@ -8,7 +8,7 @@ This a standalone app developed for the [Thr34d5 collective](https://thr34d5.org
 
 ## Stamped
 
-![WindVelocity_5](https://user-images.githubusercontent.com/21000020/76340901-4ba14f00-62ca-11ea-87b1-2d369d9bfa3c.jpg)
+![WindVelocity_5_Stamped](https://user-images.githubusercontent.com/21000020/76341162-a63aab00-62ca-11ea-807b-1f6868a58461.jpg)
 
 It's written in C++ and the image manipulation is done through shaders using the [Vulkan](https://www.khronos.org/vulkan/) API. The GUI is written using the [ImGui](https://github.com/ocornut/imgui) library.
 
