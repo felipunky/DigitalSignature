@@ -5,7 +5,7 @@ This a standalone app developed for the [Thr34d5 collective](https://thr34d5.org
 ## Original
 
 ![WindVelocity_5](https://user-images.githubusercontent.com/21000020/76341025-725f8580-62ca-11ea-90be-680a47cf09bf.jpg)
-Mesh created using the [GHopperGIS](https://www.food4rhino.com/app/ghoppergis) plugin for Grasshopper, rendered in RedShift for Houdini
+Mesh created using the [GHopperGIS](https://www.food4rhino.com/app/ghoppergis) plugin for Grasshopper (using wind velocity data from the [NCEP](https://nomads.ncep.noaa.gov/)), rendered in RedShift for Houdini
 
 ## Stamped
 
