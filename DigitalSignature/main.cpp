@@ -95,6 +95,7 @@ struct UniformBufferObject
 
 	glm::vec2 iResolution;
 	glm::vec2 iStampResolution;
+	glm::vec2 iMove;
 	float iSize;
 	float iAlpha;
 	float iTime;
@@ -219,7 +220,7 @@ private:
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
-	float sizeMultiplier = 5.0, transparency = 0.1;
+	float sizeMultiplier = 5.0, transparency = 0.1, xTrans = 0.0, yTrans = 0.0;
     std::string tempOutImageName;
 	// List box
 	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
@@ -317,6 +318,8 @@ private:
 		}
 		ImGui::Checkbox("Flip Image", &flip);
 		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("XPos", &xTrans, 0.0, 1.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("YPos", &yTrans, 0.0, 1.0, "%.3f", 1.0f);
 		ImGui::SliderFloat("Alpha", &transparency, 0.0, 1.0, "%.3f", 1.0f);
 		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
 		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 5, 4);
@@ -1451,6 +1454,7 @@ private:
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
+		ubo.iMove = glm::vec2(xTrans, yTrans);
 		ubo.iSize = sizeMultiplier;
 		ubo.iAlpha = transparency;
 		ubo.iTime = time;
@@ -1459,7 +1463,6 @@ private:
 		vkMapMemory(device, uniformBuffersMemory[imageIndex], 0, sizeof(ubo), 0, &data);
 		memcpy(data, &ubo, sizeof(ubo));
 		vkUnmapMemory(device, uniformBuffersMemory[imageIndex]);
-
 	}
 
 	void drawFrame() {
