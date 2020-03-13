@@ -31,7 +31,7 @@
   ((sizeof(a) / sizeof(*(a))) / \
   static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
 
-#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+//#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 
 int WIDTH = 800;
 int HEIGHT = 600;
@@ -40,9 +40,9 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test";
+std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\Logo.png";
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, "Images\\Logos\\Logo.png" };
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -145,9 +145,9 @@ const std::vector<uint16_t> indices = {
 
 class DigitalSignature {
 public:
-	void run() {
+	void run(bool flip) {
 		initWindow();
-		initVulkan();
+		initVulkan(flip);
 		mainLoop();
 		cleanup();
 		if (changeImage) {
@@ -215,6 +215,7 @@ private:
 
 	// ImGui.
 	bool isImGuiWindowCreated = false;
+	bool flip = false;
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
@@ -310,9 +311,11 @@ private:
 		ImGui::Begin("Thr34d5");
 
 		bool inputImage = ImGui::InputText("Path to Image", &imageName);
-		if (ImGui::Button("Change image")) {
+		bool logoImage = ImGui::InputText("Path to Logo", &logoImageName);
+		if (ImGui::Button("Reload")) {
 			changeImage = true;
 		}
+		ImGui::Checkbox("Flip Image", &flip);
 		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f", 1.0f);
 		ImGui::SliderFloat("Alpha", &transparency, 0.0, 1.0, "%.3f", 1.0f);
 		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
@@ -350,7 +353,7 @@ private:
 		}
 	}
 
-	void initVulkan() {
+	void initVulkan(bool flip) {
 		createInstance();
 		setupDebugMessenger();
 		createSurface();
@@ -363,7 +366,7 @@ private:
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
-		createTextureImage();
+		createTextureImage(flip);
 		createTextureImageView();
 		createTextureSampler();
 		createVertexBuffer();
@@ -922,13 +925,22 @@ private:
 	}
 
 	void getImageSize(std::string textureName, int *texWidth, int* texHeight, int* texChannels) {
+		//if (flipImage) {
+			/*stbi_set_flip_vertically_on_load(flipImage);*/
+			//flipImage = false;
+		//}
 		pixels = stbi_load(textureName.c_str(), texWidth, texHeight, texChannels, STBI_rgb_alpha);
 	}
 
-	void createTextureImage() {
+	void createTextureImage(bool flip) {
 		for (int i = 0; i < NUMBER_OF_IMAGES; ++i)
 		{
-
+			if (i == 0) {
+				stbi_set_flip_vertically_on_load(flip);
+			}
+			else {
+				stbi_set_flip_vertically_on_load(false);
+			}
 			getImageSize(IMAGE_NAMES[i], &IMAGE_WIDTH[i], &IMAGE_HEIGHT[i], &IMAGE_CHANNELS[i]);
 			VkDeviceSize imageSize = IMAGE_WIDTH[i] * IMAGE_HEIGHT[i] * 4;
 
@@ -2119,8 +2131,9 @@ private:
 	void changeImageName() {
 		glfwDestroyWindow(window);
 		IMAGE_NAMES[0] = imageName;
+		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;
 		DigitalSignature app;
-		app.run();
+		app.run(flip);
 	}
 };
 
@@ -2128,7 +2141,7 @@ int main() {
 	DigitalSignature app;
 
 	try {
-		app.run();
+		app.run(false);
 	}
 	catch (const std::exception& e) {
 		std::cerr << e.what() << std::endl;
