@@ -29,7 +29,7 @@ void main()
 	vec2 uv = fragCoord / iResolution;
 	vec2 uvStamp = fragCoord / iStampResolution;
 	uvStamp.x -= 1.0 / ( uv.x / uvStamp.x );
-	uvStamp += vec2( ubo.iMove.x, ubo.iMove.y );
+	uvStamp += ubo.iMove;
     uvStamp *= ubo.iSize;//siz;
     
     vec4 col = texture( texSampler[0], uv );
