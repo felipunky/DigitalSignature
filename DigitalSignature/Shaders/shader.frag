@@ -9,6 +9,7 @@ layout( binding = 0 ) uniform UniformBufferObject
 	vec2 iMove;
 	float iSize;
 	float iAlpha;
+	float iTransparency;
 	float iTime;
 
 } ubo;
@@ -39,7 +40,7 @@ void main()
 	if( digitalStamp.a > ubo.iAlpha && uvStamp.y > -1.0 && uvStamp.y < 0.0 && uvStamp.x > -1.0 && uvStamp.x < 0.0 )
     {
 
-		col = digitalStamp;
+		col = mix( digitalStamp, col, ubo.iTransparency );
 
 	} 
 

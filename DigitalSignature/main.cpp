@@ -98,6 +98,7 @@ struct UniformBufferObject
 	glm::vec2 iMove;
 	float iSize;
 	float iAlpha;
+	float iTransparency;
 	float iTime;
 
 };
@@ -146,8 +147,8 @@ const std::vector<uint16_t> indices = {
 
 class DigitalSignature {
 public:
-	void run(bool flip) {
-		initWindow();
+	void run(bool flip, float resize) {
+		initWindow(resize);
 		initVulkan(flip);
 		mainLoop();
 		cleanup();
@@ -220,19 +221,19 @@ private:
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
-	float sizeMultiplier = 5.0, transparency = 0.1, xTrans = 0.0, yTrans = 0.0;
+	float sizeMultiplier = 5.0, alpha = 0.1, xTrans = 0.0, yTrans = 0.0, transparency = 0.0, resize = 1.0;
     std::string tempOutImageName;
 	// List box
 	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
 	int fileFormat;
 
-	void initWindow() {
+	void initWindow(float resize) {
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
-		window = glfwCreateWindow(IMAGE_WIDTH[0], IMAGE_HEIGHT[0], "THR34D5 Digital Signature", nullptr, nullptr);
+		window = glfwCreateWindow(IMAGE_WIDTH[0]/resize, IMAGE_HEIGHT[0]/resize, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -317,10 +318,12 @@ private:
 			changeImage = true;
 		}
 		ImGui::Checkbox("Flip Image", &flip);
-		ImGui::SliderFloat("Size", &sizeMultiplier, 2.0, 10.0, "%.3f", 1.0f);
-		ImGui::SliderFloat("XPos", &xTrans, 0.0, 1.0, "%.3f", 1.0f);
-		ImGui::SliderFloat("YPos", &yTrans, 0.0, 1.0, "%.3f", 1.0f);
-		ImGui::SliderFloat("Alpha", &transparency, 0.0, 1.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("Size", &sizeMultiplier, 0.0, 10.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("Resize Window", &resize, 1.0, 10.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("XPos", &xTrans, -1.0, 1.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("YPos", &yTrans, -1.0, 1.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("Alpha", &alpha, 0.0, 1.0, "%.3f", 1.0f);
+		ImGui::SliderFloat("Transparency", &transparency, 0.0, 1.0, "%.3f", 1.0f);
 		bool outputImage = ImGui::InputText("Save As (No file type at the end, only the name)", &outputImageName);
 		ImGui::ListBox("File format\n(single select)", &fileFormat, listbox_items, 5, 4);
 		tempOutImageName = outputImageName + listbox_items[fileFormat];
@@ -928,10 +931,6 @@ private:
 	}
 
 	void getImageSize(std::string textureName, int *texWidth, int* texHeight, int* texChannels) {
-		//if (flipImage) {
-			/*stbi_set_flip_vertically_on_load(flipImage);*/
-			//flipImage = false;
-		//}
 		pixels = stbi_load(textureName.c_str(), texWidth, texHeight, texChannels, STBI_rgb_alpha);
 	}
 
@@ -1456,7 +1455,8 @@ private:
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
 		ubo.iMove = glm::vec2(xTrans, yTrans);
 		ubo.iSize = sizeMultiplier;
-		ubo.iAlpha = transparency;
+		ubo.iAlpha = alpha;
+		ubo.iTransparency = transparency;
 		ubo.iTime = time;
 
 		void* data;
@@ -2136,7 +2136,7 @@ private:
 		IMAGE_NAMES[0] = imageName;
 		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;
 		DigitalSignature app;
-		app.run(flip);
+		app.run(flip, resize);
 	}
 };
 
@@ -2144,7 +2144,7 @@ int main() {
 	DigitalSignature app;
 
 	try {
-		app.run(false);
+		app.run(false, 1.0);
 	}
 	catch (const std::exception& e) {
 		std::cerr << e.what() << std::endl;
