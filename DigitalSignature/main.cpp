@@ -46,12 +46,15 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\Logo.png",
+std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\LogoUno.png",
 imageOne = "Images\\texture.jpg";// "Images\\WindVelocity_4.jpg";
 
 std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
 
-std::string videoName = "D:\\\Videos\\\BlasSaltando.mp4";
+//std::string videoName = "D:\\Videos\\SlowOldWatch.mp4";
+//std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
+//std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
+std::string videoName = "D:\\Videos\\SimAUDWorkshop\\Introduction\\Introduction.mp4";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -243,6 +246,7 @@ private:
 	unsigned char* image;
 	int numberOfFrames = 0;
 	int frameCounter = 0;
+	cv::VideoWriter writer;
 
 	VkImage textureImageVideo;
 	VkDeviceMemory textureImageVideoMemory;
@@ -254,8 +258,10 @@ private:
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-		getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
-		window = glfwCreateWindow(IMAGE_WIDTH[0] / (int)resize, IMAGE_HEIGHT[0] / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
+		//getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
+		//window = glfwCreateWindow(IMAGE_WIDTH[0] / (int)resize, IMAGE_HEIGHT[0] / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
+		openVideo();
+		window = glfwCreateWindow(videoWidth / (int) resize, videoHeight / (int) resize, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -405,6 +411,19 @@ private:
 		image = cvMat2TexInput(frame);
 	}
 
+	void openWriter() {
+		int codec = cv::VideoWriter::fourcc('H', '2', '6', '4');
+		//int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
+		double fps = 25.0;
+		std::string fileName = "Videos\\Test.mp4";
+		//bool isColor = (frame.type() == CV_8UC3);
+		writer.open(fileName, codec, fps, frame.size(), true);
+		if (!writer.isOpened()) {
+			std::cerr << "Could not open the output video file for write\n";
+			exit(1);
+		}
+	}
+
 	void initVulkan(bool flip) {
 		createInstance();
 		setupDebugMessenger();
@@ -419,15 +438,13 @@ private:
 		createFramebuffers();
 		createCommandPool();
 		createTextureImage(flip);
-		createTextureImageVideo();
 		createTextureImageView();
-		createTextureImageVideoView();
 		createTextureSampler();
-		createTextureVideoSampler();
-		/*openVideo();
+		openVideo();
+		openWriter();
 		createTextureImageVideo();
 		createTextureImageVideoView();
-		createTextureVideoSampler();*/
+		createTextureVideoSampler();
 		createVertexBuffer();
 		createIndexBuffer();
 		createUniformBuffers();
@@ -440,7 +457,7 @@ private:
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window) && !changeImage) {
 			glfwPollEvents();
-			/*
+			//cap.read(frame);
 			cap >> frame;
 			frameCounter++;
 			// check if we succeeded
@@ -452,14 +469,18 @@ private:
 				break;
 			} 
 			else {
-				cv::imshow("Live", frame);
+				//cv::imshow("Live", frame);
 				image = cvMat2TexInput(frame);
 			}
 
 			if (image) {
-				//createTextureImageVideo();
+				createTextureImageVideo();
+				createTextureImageVideoView();
+				createTextureVideoSampler();
+				createDescriptorPool();
+				createDescriptorSets();
 			}
-			*/
+			
 			if (!isImGuiWindowCreated) {
 				imGuiSetupWindow();
 				isImGuiWindowCreated = true;
@@ -467,6 +488,9 @@ private:
 			createCommandBuffers();
 			updateUniformBuffer();
 			drawFrame();
+			cv::Mat tempVideoFrame = videoFrame();
+			//cv::imshow("Live", tempVideoFrame);
+			//writer.write(tempVideoFrame);
 		}
 		vkDeviceWaitIdle(device);
 		ImGui_ImplVulkan_Shutdown();
@@ -509,6 +533,8 @@ private:
 			vkDestroyImage(device, textureImage[i], nullptr);
 			vkFreeMemory(device, textureImageMemory[i], nullptr);
 		}
+		vkDestroySampler(device, textureSamplerVideo, nullptr);
+		vkDestroyImageView(device, textureImageVideoView, nullptr);
 
 		vkDestroyImage(device, textureImageVideo, nullptr);
 		vkFreeMemory(device, textureImageVideoMemory, nullptr);
@@ -1019,7 +1045,7 @@ private:
 			}
 			getImageSize(IMAGE_NAMES[i], &IMAGE_WIDTH[i], &IMAGE_HEIGHT[i], &IMAGE_CHANNELS[i]);
 			VkDeviceSize imageSize = IMAGE_WIDTH[i] * IMAGE_HEIGHT[i] * 4;
-			std::cout << imageSize << std::endl;
+			//std::cout << imageSize << std::endl;
 
 			if (!pixels) {
 				throw std::runtime_error("failed to load texture image!");
@@ -1048,12 +1074,13 @@ private:
 	}
 
 	void createTextureImageVideo() {
-		openImage();
+		//openImage();
+		//openVideo();
 		if (!image) {
 			throw std::runtime_error("failed to load texture video!");
 		}
 		VkDeviceSize videoImageSize = videoHeight * videoWidth * 4;
-		std::cout << videoImageSize << std::endl;
+		//std::cout << videoImageSize << std::endl;
 		VkBuffer videoBuffer;
 		VkDeviceMemory videoBufferMemory;
 		createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, videoBuffer, videoBufferMemory);
@@ -1376,15 +1403,6 @@ private:
 			descriptorWrites[1].descriptorCount = 3;
 			descriptorWrites[1].pImageInfo = imageInfo;
 
-			// ImGui.
-			/*descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[2].dstSet = descriptorSets[i];
-			descriptorWrites[2].dstBinding = 2;
-			descriptorWrites[2].dstArrayElement = 0;
-			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[2].descriptorCount = 1;
-			descriptorWrites[2].pImageInfo = imgui_impl_vulkan;*/
-
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
 	}
@@ -1561,15 +1579,16 @@ private:
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-		 
+
 		if (writeImage || glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
 			SaveOutputColorTexture();
 			writeImage = false;
 		}
 
 		UniformBufferObject ubo = {};
-		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
+		ubo.iResolution = glm::vec2(videoWidth, videoHeight);
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
+		//ubo.iStampResolution = glm::vec2(videoWidth, videoHeight);
 		ubo.iMove = glm::vec2(xTrans, yTrans);
 		ubo.iSize = sizeMultiplier;
 		ubo.iAlpha = alpha;
@@ -2132,38 +2151,6 @@ private:
 			}
 		}
 
-		/*else if (fileFormat == 5) {
-			float* swizzledFloat = new float[swapChainExtent.width * swapChainExtent.height * 4];
-			for (uint32_t y = 0; y < swapChainExtent.height; y++)
-			{
-				unsigned int *row = (unsigned int*)data;
-				for (uint32_t x = 0; x < swapChainExtent.width; x++)
-				{
-					int R = (x + y * swapChainExtent.width) * 4, G = R + 1, B = G + 1,
-						A = B + 1;
-					if (colorSwizzle) {
-						swizzledFloat[R] = (float)*((unsigned char*)row + 2);
-						swizzledFloat[G] = (float)*((unsigned char*)row + 1);
-						swizzledFloat[B] = (float)*((unsigned char*)row);
-						swizzledFloat[A] = (float)*((unsigned char*)row + 3);
-					}
-					else {
-						swizzledFloat[R] = *((unsigned char*)row);
-						swizzledFloat[G] = *((unsigned char*)row + 1);
-						swizzledFloat[B] = *((unsigned char*)row + 2);
-						swizzledFloat[A] = *((unsigned char*)row + 3);
-					}
-					row++;
-				}
-				data += subResourceLayout.rowPitch;
-			}
-
-			std::string tempOutImageName;
-			tempOutImageName = outputImageName + listbox_items[5];
-			stbi_write_hdr(tempOutImageName.c_str(), swapChainExtent.width, swapChainExtent.height, 4, swizzledFloat);
-			delete swizzledFloat;
-		}*/
-
 		else if (fileFormat == 2) {
 			//std::string tempOutImageName;
 			//tempOutImageName = outputImageName + listbox_items[2];
@@ -2213,6 +2200,225 @@ private:
 		vkUnmapMemory(device, dstImageMemory);
 		vkFreeMemory(device, dstImageMemory, nullptr);
 		vkDestroyImage(device, dstImage, nullptr);
+	}
+
+	cv::Mat videoFrame()
+	{
+
+		bool supportsBlit = true;
+
+		// Check blit support for source and destination
+		VkFormatProperties formatProps;
+
+		// Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
+		if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
+			std::cerr << "Device does not support blitting from optimal tiled images, using copy instead of blit!" << std::endl;
+			supportsBlit = false;
+		}
+
+		// Check if the device supports blitting to linear images
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
+		if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
+			std::cerr << "Device does not support blitting to linear tiled images, using copy instead of blit!" << std::endl;
+			supportsBlit = false;
+		}
+
+		// Source for the copy is the last rendered swapchain image
+		VkImage srcImage = swapChainImages[currentFrame];
+
+		// Create the linear tiled destination image to copy to and to read the memory from
+		VkImageCreateInfo imageCreateCI = {};
+		imageCreateCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+
+
+		imageCreateCI.imageType = VK_IMAGE_TYPE_2D;
+		// Note that vkCmdBlitImage (if supported) will also do format conversions if the swapchain color format would differ
+		imageCreateCI.format = swapChainImageFormat;
+		imageCreateCI.extent.width = swapChainExtent.width;
+		imageCreateCI.extent.height = swapChainExtent.height;
+		imageCreateCI.extent.depth = 1;
+		imageCreateCI.arrayLayers = 1;
+		imageCreateCI.mipLevels = 1;
+		imageCreateCI.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageCreateCI.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageCreateCI.tiling = VK_IMAGE_TILING_LINEAR;
+		imageCreateCI.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		// Create the image
+		VkImage dstImage;
+		if (vkCreateImage(device, &imageCreateCI, nullptr, &dstImage) != VK_SUCCESS)
+		{
+			throw std::runtime_error("failed to create VkImage for video destination!");
+		}
+		// Create memory to back up the image
+		VkMemoryRequirements memRequirements;
+
+		VkMemoryAllocateInfo memAllocInfo{};
+		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+
+
+		VkDeviceMemory dstImageMemory;
+		vkGetImageMemoryRequirements(device, dstImage, &memRequirements);
+		memAllocInfo.allocationSize = memRequirements.size;
+		// Memory must be host visible to copy from
+
+		memAllocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if (vkAllocateMemory(device, &memAllocInfo, nullptr, &dstImageMemory) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate memory for destination VkDeviceMemory!");
+		}
+
+		if (vkBindImageMemory(device, dstImage, dstImageMemory, 0) != VK_SUCCESS) {
+			throw::std::runtime_error("failed to bind memory to destination memory!");
+		}
+
+		// Do the actual blit from the swapchain image to our host visible destination image
+
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
+		cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		cmdBufAllocateInfo.commandPool = commandPool;
+		cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		cmdBufAllocateInfo.commandBufferCount = 1;
+
+
+		VkCommandBuffer copyCmd;
+		if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd) != VK_SUCCESS) {
+			throw::std::runtime_error("failed to allocate a command buffer!");
+		}
+
+		VkCommandBufferBeginInfo cmdBufInfo{};
+		cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+		if (vkBeginCommandBuffer(copyCmd, &cmdBufInfo) != VK_SUCCESS) {
+			throw::std::runtime_error("failed to record a command buffer!");
+		}
+
+
+		VkImageMemoryBarrier imageMemoryBarrier{};
+		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+
+		// Transition destination image to transfer destination layout
+		insertImageMemoryBarrier(
+			copyCmd,
+			dstImage,
+			0,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+		// Transition swapchain image from present to transfer source layout
+		insertImageMemoryBarrier(
+			copyCmd,
+			srcImage,
+			VK_ACCESS_MEMORY_READ_BIT,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+		// If source and destination support blit we'll blit as this also does automatic format conversion (e.g. from BGR to RGB)
+		if (supportsBlit)
+		{
+			// Define the region to blit (we will blit the whole swapchain image)
+			VkOffset3D blitSize;
+			blitSize.x = swapChainExtent.width;
+			blitSize.y = swapChainExtent.height;
+			blitSize.z = 1;
+			VkImageBlit imageBlitRegion{};
+			imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imageBlitRegion.srcSubresource.layerCount = 1;
+			imageBlitRegion.srcOffsets[1] = blitSize;
+			imageBlitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imageBlitRegion.dstSubresource.layerCount = 1;
+			imageBlitRegion.dstOffsets[1] = blitSize;
+
+			// Issue the blit command
+			vkCmdBlitImage(
+				copyCmd,
+				srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&imageBlitRegion,
+				VK_FILTER_NEAREST);
+		}
+		else
+		{
+			// Otherwise use image copy (requires us to manually flip components)
+			VkImageCopy imageCopyRegion{};
+			imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imageCopyRegion.srcSubresource.layerCount = 1;
+			imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imageCopyRegion.dstSubresource.layerCount = 1;
+			imageCopyRegion.extent.width = swapChainExtent.width;
+			imageCopyRegion.extent.height = swapChainExtent.height;
+			imageCopyRegion.extent.depth = 1;
+
+			// Issue the copy command
+			vkCmdCopyImage(
+				copyCmd,
+				srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&imageCopyRegion);
+		}
+
+		// Transition destination image to general layout, which is the required layout for mapping the image memory later on
+		insertImageMemoryBarrier(
+			copyCmd,
+			dstImage,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_MEMORY_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+		// Transition back the swap chain image after the blit is done
+		insertImageMemoryBarrier(
+			copyCmd,
+			srcImage,
+			VK_ACCESS_TRANSFER_READ_BIT,
+			VK_ACCESS_MEMORY_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+
+
+		endSingleTimeCommands(copyCmd);
+
+
+		// Get layout of the image (including row pitch)
+		VkImageSubresource subResource{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+		VkSubresourceLayout subResourceLayout;
+		vkGetImageSubresourceLayout(device, dstImage, &subResource, &subResourceLayout);
+
+		// Map image memory so we can start copying from it
+		unsigned char* data;
+		vkMapMemory(device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
+		data += subResourceLayout.offset;
+
+		cv::Mat4b videoFrame = cv::Mat4b(videoHeight, videoWidth);
+		size_t t = (videoWidth * videoHeight * 1);// +3 * (videoHeight * 32 + videoWidth * 32);
+		//std::cout << vf << std::endl;
+		memcpy(videoFrame.data, data, t);
+
+		// Clean up resources
+		vkUnmapMemory(device, dstImageMemory);
+		vkFreeMemory(device, dstImageMemory, nullptr);
+		vkDestroyImage(device, dstImage, nullptr);
+
+		return videoFrame;
 
 	}
 
@@ -2260,9 +2466,9 @@ private:
 	unsigned char* cvMat2TexInput(cv::Mat& img)
 	{
 		cv::cvtColor(img, img, cv::COLOR_BGR2RGBA);
-		/*cv::transpose(img, img);
+		cv::transpose(img, img);
 		cv::flip(img, img, 1);
-		cv::flip(img, img, 0);*/
+		//cv::flip(img, img, 0);
 		return img.data;
 	}
 };
