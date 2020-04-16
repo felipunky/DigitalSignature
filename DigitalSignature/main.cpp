@@ -27,11 +27,17 @@
 #include "examples/imgui_impl_glfw.h"
 #include "examples/imgui_impl_vulkan.h"
 
-#define ARRAYSIZE(a) \
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+
+// No console.
+/*#define ARRAYSIZE(a) \
   ((sizeof(a) / sizeof(*(a))) / \
   static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
 
-#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
+#pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")*/
 
 int WIDTH = 800;
 int HEIGHT = 600;
@@ -40,9 +46,12 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\Logo.png";
+std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\Logo.png",
+imageOne = "Images\\texture.jpg";// "Images\\WindVelocity_4.jpg";
 
 std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
+
+std::string videoName = "D:\\\Videos\\\BlasSaltando.mp4";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -221,11 +230,24 @@ private:
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
-	float sizeMultiplier = 5.0, alpha = 0.1, xTrans = 0.0, yTrans = 0.0, transparency = 0.0, resize = 1.0;
+	float sizeMultiplier = 5.0f, alpha = 0.1f, xTrans = 0.0f, yTrans = 0.0f, transparency = 0.0f, resize = 1.0f;
     std::string tempOutImageName;
 	// List box
 	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
 	int fileFormat;
+
+	// OpenCV video.
+	cv::Mat frame;
+	cv::VideoCapture cap;
+	int videoWidth, videoHeight, channels;
+	unsigned char* image;
+	int numberOfFrames = 0;
+	int frameCounter = 0;
+
+	VkImage textureImageVideo;
+	VkDeviceMemory textureImageVideoMemory;
+	VkImageView textureImageVideoView;
+	VkSampler textureSamplerVideo;
 
 	void initWindow(float resize) {
 		glfwInit();
@@ -233,7 +255,7 @@ private:
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
-		window = glfwCreateWindow(IMAGE_WIDTH[0]/resize, IMAGE_HEIGHT[0]/resize, "THR34D5 Digital Signature", nullptr, nullptr);
+		window = glfwCreateWindow(IMAGE_WIDTH[0] / (int)resize, IMAGE_HEIGHT[0] / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -359,6 +381,30 @@ private:
 		}
 	}
 
+	void openVideo() {
+		cap.open(videoName);
+		if (!cap.isOpened()) {
+			std::cout << "Video file not loaded!" << std::endl;
+		}
+		cap >> frame;
+		numberOfFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
+		videoWidth = frame.rows;
+		videoHeight = frame.cols;
+		image = cvMat2TexInput(frame);
+	}
+
+	void openImage() {
+		frame = cv::imread(imageOne.c_str(), cv::IMREAD_COLOR);
+		if (frame.empty()) {
+			std::cerr << "Couldn't open file: " << imageOne << std::endl;
+			exit(1);
+		}
+		videoWidth = frame.rows;
+		videoHeight = frame.cols;
+		channels = frame.channels();
+		image = cvMat2TexInput(frame);
+	}
+
 	void initVulkan(bool flip) {
 		createInstance();
 		setupDebugMessenger();
@@ -373,14 +419,20 @@ private:
 		createFramebuffers();
 		createCommandPool();
 		createTextureImage(flip);
+		createTextureImageVideo();
 		createTextureImageView();
+		createTextureImageVideoView();
 		createTextureSampler();
+		createTextureVideoSampler();
+		/*openVideo();
+		createTextureImageVideo();
+		createTextureImageVideoView();
+		createTextureVideoSampler();*/
 		createVertexBuffer();
 		createIndexBuffer();
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-		//createCommandBuffers();
 		createSyncObjects();
 		initImGui(float(swapChainExtent.width), float(swapChainExtent.height));
 	}
@@ -388,8 +440,27 @@ private:
 	void mainLoop() {
 		while (!glfwWindowShouldClose(window) && !changeImage) {
 			glfwPollEvents();
-			if (!isImGuiWindowCreated)
-			{
+			/*
+			cap >> frame;
+			frameCounter++;
+			// check if we succeeded
+			if (frameCounter == numberOfFrames - 1) {
+				frameCounter = 0;
+				cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+			}
+			if (frame.empty()) {
+				break;
+			} 
+			else {
+				cv::imshow("Live", frame);
+				image = cvMat2TexInput(frame);
+			}
+
+			if (image) {
+				//createTextureImageVideo();
+			}
+			*/
+			if (!isImGuiWindowCreated) {
 				imGuiSetupWindow();
 				isImGuiWindowCreated = true;
 			}
@@ -438,6 +509,9 @@ private:
 			vkDestroyImage(device, textureImage[i], nullptr);
 			vkFreeMemory(device, textureImageMemory[i], nullptr);
 		}
+
+		vkDestroyImage(device, textureImageVideo, nullptr);
+		vkFreeMemory(device, textureImageVideoMemory, nullptr);
 
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
@@ -737,7 +811,7 @@ private:
 
 		VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
 		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorCount = 2;
+		samplerLayoutBinding.descriptorCount = 3;
 		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		samplerLayoutBinding.pImmutableSamplers = nullptr;
 		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -945,6 +1019,7 @@ private:
 			}
 			getImageSize(IMAGE_NAMES[i], &IMAGE_WIDTH[i], &IMAGE_HEIGHT[i], &IMAGE_CHANNELS[i]);
 			VkDeviceSize imageSize = IMAGE_WIDTH[i] * IMAGE_HEIGHT[i] * 4;
+			std::cout << imageSize << std::endl;
 
 			if (!pixels) {
 				throw std::runtime_error("failed to load texture image!");
@@ -954,7 +1029,7 @@ private:
 			VkDeviceMemory stagingBufferMemory;
 			createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-			void* data;
+			void *data;
 			vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
 			memcpy(data, pixels, static_cast<size_t>(imageSize));
 			vkUnmapMemory(device, stagingBufferMemory);
@@ -972,11 +1047,41 @@ private:
 		}
 	}
 
+	void createTextureImageVideo() {
+		openImage();
+		if (!image) {
+			throw std::runtime_error("failed to load texture video!");
+		}
+		VkDeviceSize videoImageSize = videoHeight * videoWidth * 4;
+		std::cout << videoImageSize << std::endl;
+		VkBuffer videoBuffer;
+		VkDeviceMemory videoBufferMemory;
+		createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, videoBuffer, videoBufferMemory);
+
+		void *data;
+		vkMapMemory(device, videoBufferMemory, 0, videoImageSize, 0, &data);
+		memcpy(data, image, static_cast<size_t>(videoImageSize));
+		vkUnmapMemory(device, videoBufferMemory);
+
+		createImage(videoWidth, videoHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImageVideo, textureImageVideoMemory);
+
+		transitionImageLayout(textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(videoBuffer, textureImageVideo, static_cast<uint32_t>(videoWidth), static_cast<uint32_t>(videoHeight));
+		transitionImageLayout(textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		
+		vkDestroyBuffer(device, videoBuffer, nullptr);
+		vkFreeMemory(device, videoBufferMemory, nullptr);
+	}
+
 	void createTextureImageView() {
 		for (int i = 0; i < NUMBER_OF_IMAGES; ++i)
 		{
 			textureImageView[i] = createImageView(&textureImage[i], VK_FORMAT_R8G8B8A8_SRGB);
 		}
+	}
+
+	void createTextureImageVideoView() {
+		textureImageVideoView = createImageView(&textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB);
 	}
 
 	void createTextureSampler() {
@@ -999,6 +1104,27 @@ private:
 			if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler[i]) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create texture sampler!");
 			}
+		}
+	}
+
+	void createTextureVideoSampler() {
+		VkSamplerCreateInfo samplerInfo = {};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSamplerVideo) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create texture sampler!");
 		}
 	}
 
@@ -1185,7 +1311,7 @@ private:
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 2;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 3;
 		// This Descriptor Pool is Used by ImGui
 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
@@ -1221,13 +1347,16 @@ private:
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo[2] = {};
+			VkDescriptorImageInfo imageInfo[3] = {};
 			imageInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo[0].imageView = textureImageView[0];
 			imageInfo[0].sampler = textureSampler[0];
 			imageInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo[1].imageView = textureImageView[1];
 			imageInfo[1].sampler = textureSampler[1];
+			imageInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[2].imageView = textureImageVideoView;
+			imageInfo[2].sampler = textureSamplerVideo;
 
 			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
 
@@ -1244,7 +1373,7 @@ private:
 			descriptorWrites[1].dstBinding = 1;
 			descriptorWrites[1].dstArrayElement = 0;
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 2;
+			descriptorWrites[1].descriptorCount = 3;
 			descriptorWrites[1].pImageInfo = imageInfo;
 
 			// ImGui.
@@ -1279,7 +1408,9 @@ private:
 		allocInfo.allocationSize = memRequirements.size;
 		allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-		if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+		VkResult result = vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory);
+		if (result != VK_SUCCESS) {
+			std::cout << result << std::endl;
 			throw std::runtime_error("failed to allocate buffer memory!");
 		}
 
@@ -1299,20 +1430,6 @@ private:
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-		/*if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
-			VkCommandBufferInheritanceInfo inheritanceInfo;
-			inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-			inheritanceInfo.pNext = nullptr;
-			inheritanceInfo.renderPass = renderPass;
-			inheritanceInfo.subpass = 0;
-			inheritanceInfo.occlusionQueryEnable = VK_FALSE;
-			inheritanceInfo.framebuffer = VK_NULL_HANDLE;
-			inheritanceInfo.pipelineStatistics = 0;
-			inheritanceInfo.queryFlags = 0;
-
-			beginInfo.pInheritanceInfo = &inheritanceInfo;
-		}*/
 
 		vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
@@ -2137,6 +2254,16 @@ private:
 		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;
 		DigitalSignature app;
 		app.run(flip, resize);
+	}
+
+	// Utility function to link OpenCV.
+	unsigned char* cvMat2TexInput(cv::Mat& img)
+	{
+		cv::cvtColor(img, img, cv::COLOR_BGR2RGBA);
+		/*cv::transpose(img, img);
+		cv::flip(img, img, 1);
+		cv::flip(img, img, 0);*/
+		return img.data;
 	}
 };
 

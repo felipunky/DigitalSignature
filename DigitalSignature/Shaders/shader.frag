@@ -14,7 +14,7 @@ layout( binding = 0 ) uniform UniformBufferObject
 
 } ubo;
 
-layout(binding = 1) uniform sampler2D texSampler[2];
+layout(binding = 1) uniform sampler2D texSampler[3];
 
 layout( location = 0 ) in vec3 fragColor;
 layout( location = 0 ) out vec4 outColor;
@@ -33,7 +33,7 @@ void main()
 	uvStamp += ubo.iMove;
     uvStamp *= ubo.iSize;//siz;
     
-    vec4 col = texture( texSampler[0], uv );
+    vec4 col = texture( texSampler[2], uv );
 	vec4 digitalStamp = texture( texSampler[1], uvStamp ); 
 
     //if( digitalStamp.a > 0.0 && uvStamp.y < xy && uvStamp.x > -xy )
