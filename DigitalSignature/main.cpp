@@ -41,6 +41,7 @@
 
 int WIDTH = 800;
 int HEIGHT = 600;
+//double ASPECTRATIO = 1.0f;
 
 const int NUMBER_OF_IMAGES = 2;
 
@@ -53,8 +54,8 @@ std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
 
 //std::string videoName = "D:\\Videos\\SlowOldWatch.mp4";
 //std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
-//std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
-std::string videoName = "D:\\Videos\\SimAUDWorkshop\\Introduction\\Introduction.mp4";
+std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
+//std::string videoName = "D:\\Videos\\SimAUDWorkshop\\Introduction\\Introduction.mp4";
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -161,7 +162,7 @@ class DigitalSignature {
 public:
 	void run(bool flip, float resize) {
 		initWindow(resize);
-		initVulkan(flip);
+		initVulkan(flip, resize);
 		mainLoop();
 		cleanup();
 		if (changeImage) {
@@ -241,6 +242,7 @@ private:
 
 	// OpenCV video.
 	cv::Mat frame;
+	cv::Mat tempVideoFrame;
 	cv::VideoCapture cap;
 	int videoWidth, videoHeight, channels;
 	unsigned char* image;
@@ -253,6 +255,8 @@ private:
 	VkImageView textureImageVideoView;
 	VkSampler textureSamplerVideo;
 
+	float time;
+
 	void initWindow(float resize) {
 		glfwInit();
 
@@ -261,9 +265,10 @@ private:
 		//getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
 		//window = glfwCreateWindow(IMAGE_WIDTH[0] / (int)resize, IMAGE_HEIGHT[0] / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
 		openVideo();
-		window = glfwCreateWindow(videoWidth / (int) resize, videoHeight / (int) resize, "THR34D5 Digital Signature", nullptr, nullptr);
+		window = glfwCreateWindow(videoWidth / (int)resize, videoHeight / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+		glfwSetWindowAspectRatio(window, videoWidth, videoHeight);
 
 		GLFWimage images[2];
 		images[0].pixels = stbi_load("Images\\Icons\\WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
@@ -394,8 +399,14 @@ private:
 		}
 		cap >> frame;
 		numberOfFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
-		videoWidth = frame.rows;
-		videoHeight = frame.cols;
+		videoWidth = frame.rows / (int)resize;
+		WIDTH = videoWidth;
+		videoHeight = frame.cols / (int)resize;
+		HEIGHT = videoHeight;
+		//ASPECTRATIO = (double)videoWidth / (double)videoHeight;
+		/*td::cout << HEIGHT << std::endl;
+		std::cout << WIDTH << std::endl;
+		std::cout << ASPECTRATIO << std::endl;*/
 		image = cvMat2TexInput(frame);
 	}
 
@@ -405,8 +416,8 @@ private:
 			std::cerr << "Couldn't open file: " << imageOne << std::endl;
 			exit(1);
 		}
-		videoWidth = frame.rows;
-		videoHeight = frame.cols;
+		videoWidth = frame.rows / resize;
+		videoHeight = frame.cols / resize;
 		channels = frame.channels();
 		image = cvMat2TexInput(frame);
 	}
@@ -424,7 +435,7 @@ private:
 		}
 	}
 
-	void initVulkan(bool flip) {
+	void initVulkan(bool flip, float resize) {
 		createInstance();
 		setupDebugMessenger();
 		createSurface();
@@ -441,7 +452,7 @@ private:
 		createTextureImageView();
 		createTextureSampler();
 		openVideo();
-		openWriter();
+		//openWriter();
 		createTextureImageVideo();
 		createTextureImageVideoView();
 		createTextureVideoSampler();
@@ -487,9 +498,11 @@ private:
 			}
 			createCommandBuffers();
 			updateUniformBuffer();
+			videoFrame();
+			cv::imshow("Live", tempVideoFrame);
 			drawFrame();
-			cv::Mat tempVideoFrame = videoFrame();
-			//cv::imshow("Live", tempVideoFrame);
+			/*videoFrame();
+			cv::imshow("Live", tempVideoFrame);*/
 			//writer.write(tempVideoFrame);
 		}
 		vkDeviceWaitIdle(device);
@@ -581,6 +594,11 @@ private:
 		cleanupSwapChain();
 
 		createSwapChain();
+		openVideo();
+		//openWriter();
+		createTextureImageVideo();
+		createTextureImageVideoView();
+		createTextureVideoSampler();
 		createImageViews();
 		createRenderPass();
 		createGraphicsPipeline();
@@ -1079,6 +1097,8 @@ private:
 		if (!image) {
 			throw std::runtime_error("failed to load texture video!");
 		}
+		/*videoHeight /= resize;
+		videoWidth /= resize;*/
 		VkDeviceSize videoImageSize = videoHeight * videoWidth * 4;
 		//std::cout << videoImageSize << std::endl;
 		VkBuffer videoBuffer;
@@ -1578,7 +1598,7 @@ private:
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		if (writeImage || glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
 			SaveOutputColorTexture();
@@ -1586,7 +1606,7 @@ private:
 		}
 
 		UniformBufferObject ubo = {};
-		ubo.iResolution = glm::vec2(videoWidth, videoHeight);
+		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
 		ubo.iStampResolution = glm::vec2(IMAGE_WIDTH[1], IMAGE_HEIGHT[1]);
 		//ubo.iStampResolution = glm::vec2(videoWidth, videoHeight);
 		ubo.iMove = glm::vec2(xTrans, yTrans);
@@ -1604,7 +1624,10 @@ private:
 	void drawFrame() {
 
 		glfwGetFramebufferSize(window, &WIDTH, &HEIGHT);
-
+		//glfwGetWindowSize(window, &WIDTH, &HEIGHT);
+		//HEIGHT = (int)((double)WIDTH * ASPECTRATIO);
+		std::cout << WIDTH << std::endl;
+		std::cout << HEIGHT << std::endl;
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 		VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1930,7 +1953,6 @@ private:
 		VkMemoryAllocateInfo memAllocInfo{};
 		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 
-
 		VkDeviceMemory dstImageMemory;
 		vkGetImageMemoryRequirements(device, dstImage, &memRequirements);
 		memAllocInfo.allocationSize = memRequirements.size;
@@ -2068,9 +2090,7 @@ private:
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
 			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
 
-
 		endSingleTimeCommands(copyCmd);
-
 
 		// Get layout of the image (including row pitch)
 		VkImageSubresource subResource{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
@@ -2202,9 +2222,8 @@ private:
 		vkDestroyImage(device, dstImage, nullptr);
 	}
 
-	cv::Mat videoFrame()
+	void videoFrame()
 	{
-
 		bool supportsBlit = true;
 
 		// Check blit support for source and destination
@@ -2213,14 +2232,14 @@ private:
 		// Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
 		vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
 		if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
-			std::cerr << "Device does not support blitting from optimal tiled images, using copy instead of blit!" << std::endl;
+			//std::cerr << "Device does not support blitting from optimal tiled images, using copy instead of blit!" << std::endl;
 			supportsBlit = false;
 		}
 
 		// Check if the device supports blitting to linear images
 		vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
 		if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
-			std::cerr << "Device does not support blitting to linear tiled images, using copy instead of blit!" << std::endl;
+			//std::cerr << "Device does not support blitting to linear tiled images, using copy instead of blit!" << std::endl;
 			supportsBlit = false;
 		}
 
@@ -2394,9 +2413,7 @@ private:
 			VK_PIPELINE_STAGE_TRANSFER_BIT,
 			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
 
-
 		endSingleTimeCommands(copyCmd);
-
 
 		// Get layout of the image (including row pitch)
 		VkImageSubresource subResource{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
@@ -2408,18 +2425,15 @@ private:
 		vkMapMemory(device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
 		data += subResourceLayout.offset;
 
-		cv::Mat4b videoFrame = cv::Mat4b(videoHeight, videoWidth);
-		size_t t = (videoWidth * videoHeight * 1);// +3 * (videoHeight * 32 + videoWidth * 32);
+		tempVideoFrame = cv::Mat4b(swapChainExtent.height, swapChainExtent.width);
+		size_t t = (swapChainExtent.width * swapChainExtent.height * 3);// +3 * (videoHeight * 32 + videoWidth * 32);
 		//std::cout << vf << std::endl;
-		memcpy(videoFrame.data, data, t);
+		memcpy(tempVideoFrame.data, data, t);
 
 		// Clean up resources
 		vkUnmapMemory(device, dstImageMemory);
 		vkFreeMemory(device, dstImageMemory, nullptr);
 		vkDestroyImage(device, dstImage, nullptr);
-
-		return videoFrame;
-
 	}
 
 	void insertImageMemoryBarrier(
