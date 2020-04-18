@@ -55,8 +55,8 @@ imageOne = "Images\\texture.jpg";// "Images\\WindVelocity_4.jpg";
 std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
 
 //std::string videoName = "D:\\Videos\\SlowOldWatch.mp4";
-std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
-//std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
+//std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
+std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
 //std::string videoName = "D:\\Videos\\SimAUDWorkshop\\Introduction\\Introduction.mp4";
 
 const std::vector<const char*> validationLayers = {
@@ -162,9 +162,10 @@ const std::vector<uint16_t> indices = {
 
 class DigitalSignature {
 public:
-	void run(bool flip, float resize) {
-		initWindow(resize, flip);
-		initVulkan(flip);
+	void run(float resize, bool flip) {
+		openVideo(resize, flip);
+		initWindow();
+		initVulkan();
 		mainLoop(flip);
 		cleanup();
 		if (changeImage) {
@@ -251,7 +252,7 @@ private:
 	int numberOfFrames = 0;
 	int frameCounter = 0;
 	cv::VideoWriter writer;
-	bool writing = false;
+	int writing = false;
 
 	VkImage textureImageVideo;
 	VkDeviceMemory textureImageVideoMemory;
@@ -260,20 +261,20 @@ private:
 
 	float time;
 
-	void initWindow(float resize, bool flip) {
+	void initWindow() {
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		//getImageSize(IMAGE_NAMES[0], &IMAGE_WIDTH[0], &IMAGE_HEIGHT[0], &IMAGE_CHANNELS[0]);
 		//window = glfwCreateWindow(IMAGE_WIDTH[0] / (int)resize, IMAGE_HEIGHT[0] / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
-		openVideo(flip);
-		window = glfwCreateWindow(videoWidth / (int)resize, videoHeight / (int)resize, "THR34D5 Digital Signature", nullptr, nullptr);
+		//openVideo(resize, flip);
+		window = glfwCreateWindow(WIDTH, HEIGHT, "THR34D5 Digital Signature", nullptr, nullptr);
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 		//const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 		//glfwSetWindowSizeLimits(window, 200, 200, mode->width, mode->height);
-		glfwSetWindowAspectRatio(window, videoWidth, videoHeight);
+		glfwSetWindowAspectRatio(window, WIDTH, HEIGHT);
 
 		GLFWimage images[2];
 		images[0].pixels = stbi_load("Images\\Icons\\WindowIcon.png", &images[0].width, &images[0].height, 0, 4);
@@ -384,30 +385,32 @@ private:
 		}
 	}
 
-	void recreateImGuiWindow(bool flip) {
+	void recreateImGuiWindow() {
 		if (!isImGuiWindowCreated)
 		{
 			ImGui_ImplVulkan_Shutdown();
 			ImGui_ImplGlfw_Shutdown();
 			ImGui::DestroyContext();
-			recreateSwapChain(flip);
+			recreateSwapChain();
 			initImGui(float(swapChainExtent.width), float(swapChainExtent.height));
 			imGuiSetupWindow();
 			isImGuiWindowCreated = true;
 		}
 	}
 
-	void openVideo(bool flip) {
+	void openVideo(float resize, bool flip) {
 		cap.open(videoName);
 		if (!cap.isOpened()) {
-			std::cout << "Video file not loaded!" << std::endl;
+			std::runtime_error("Video file not loaded!");
 		}
 		cap >> frame;
 		numberOfFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
-		videoWidth = frame.rows / (int)resize;
-		WIDTH = videoWidth;
-		videoHeight = frame.cols / (int)resize;
-		HEIGHT = videoHeight;
+		/*videoWidth = (int)((float)frame.rows / resize);
+		videoHeight = (int)((float)frame.cols / resize);*/
+		videoWidth = frame.rows;
+		videoHeight = frame.cols;
+		WIDTH = videoWidth / resize;
+		HEIGHT = videoHeight / resize;
 		if (flip) {
 			int tempWidth = videoWidth;
 			videoWidth = videoHeight;
@@ -415,23 +418,19 @@ private:
 			WIDTH = videoWidth;
 			HEIGHT = videoHeight;
 		}
-		//ASPECTRATIO = (double)videoWidth / (double)videoHeight;
-		/*td::cout << HEIGHT << std::endl;
-		std::cout << WIDTH << std::endl;
-		std::cout << ASPECTRATIO << std::endl;*/
-		image = cvMat2TexInput(frame, flip);
+		cvMat2TexInput(flip);
 	}
 
 	void openImage() {
 		frame = cv::imread(imageOne.c_str(), cv::IMREAD_COLOR);
 		if (frame.empty()) {
-			std::cerr << "Couldn't open file: " << imageOne << std::endl;
+			std::runtime_error("Couldn't open image file");
 			exit(1);
 		}
-		videoWidth = frame.rows / resize;
-		videoHeight = frame.cols / resize;
+		videoWidth = (int)((float)frame.rows / resize);
+		videoHeight = (int)((float)frame.cols / resize);
 		channels = frame.channels();
-		image = cvMat2TexInput(frame, flip);
+		cvMat2TexInput(flip);
 	}
 
 	void openWriter() {
@@ -448,7 +447,7 @@ private:
 		}
 	}
 
-	void initVulkan(bool flip) {
+	void initVulkan() {
 		createInstance();
 		setupDebugMessenger();
 		createSurface();
@@ -464,7 +463,7 @@ private:
 		createTextureImage(flip);
 		createTextureImageView();
 		createTextureSampler();
-		openVideo(flip);
+		//openVideo(resize, flip);
 		createTextureImageVideo();
 		createTextureImageVideoView();
 		createTextureVideoSampler();
@@ -493,21 +492,26 @@ private:
 				}
 			}
 
+			if (writeImage) {
+				frameCounter = 0;
+				writeImage = false;
+				writing = true;
+				cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+				openWriter();
+			}
+
 			if (frame.empty()) {
 				break;
 			} 
-			else {
-				//cv::imshow("Live", frame);
-				image = cvMat2TexInput(frame, flip);
+			cvMat2TexInput(flip);
+			if (image == NULL) {
+				break;
 			}
-
-			if (image) {
-				createTextureImageVideo();
-				createTextureImageVideoView();
-				createTextureVideoSampler();
-				createDescriptorPool();
-				createDescriptorSets();
-			}
+			createTextureImageVideo();
+			createTextureImageVideoView();
+			createTextureVideoSampler();
+			createDescriptorPool();
+			createDescriptorSets();
 			
 			if (!isImGuiWindowCreated) {
 				imGuiSetupWindow();
@@ -516,26 +520,21 @@ private:
 			createCommandBuffers();
 			updateUniformBuffer();
 			videoFrame();
-			if (writeImage) {
-				frameCounter = 0;
-				writeImage = 0;
-				writing = true;
-				cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-				openWriter();
+			
+			// The frameCounter conditional is hacky and should be replaced.
+			if (writing && frameCounter > 3) {
+				writer << tempVideoFrame;
+				std::cout << frameCounter << std::endl;
 			}
-			if (writing) {
-				writer.write(tempVideoFrame);
-			}
-			//cv::imshow("Live", tempVideoFrame);
-			drawFrame(flip);
-			//writer.write(tempVideoFrame);
+			cv::imshow("Live", tempVideoFrame);
+			drawFrame();
 		}
 		vkDeviceWaitIdle(device);
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
-		/*cap.release();
-		writer.release();*/
+		cap.release();
+		writer.release();
 	}
 
 	void cleanupSwapChain() {
@@ -609,7 +608,7 @@ private:
 		glfwTerminate();
 	}
 
-	void recreateSwapChain(bool flip) {
+	void recreateSwapChain() {
 		int width = 0, height = 0;
 		glfwGetFramebufferSize(window, &width, &height);
 		while (width == 0 || height == 0) {
@@ -621,11 +620,11 @@ private:
 		cleanupSwapChain();
 
 		createSwapChain();
-		openVideo(flip);
+		//openVideo(flip);
 		//openWriter();
-		createTextureImageVideo();
+		/*createTextureImageVideo();
 		createTextureImageVideoView();
-		createTextureVideoSampler();
+		createTextureVideoSampler();*/
 		createImageViews();
 		createRenderPass();
 		createGraphicsPipeline();
@@ -1119,15 +1118,10 @@ private:
 	}
 
 	void createTextureImageVideo() {
-		//openImage();
-		//openVideo();
 		if (!image) {
 			throw std::runtime_error("failed to load texture video!");
 		}
-		/*videoHeight /= resize;
-		videoWidth /= resize;*/
 		VkDeviceSize videoImageSize = videoHeight * videoWidth * 4;
-		//std::cout << videoImageSize << std::endl;
 		VkBuffer videoBuffer;
 		VkDeviceMemory videoBufferMemory;
 		createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, videoBuffer, videoBufferMemory);
@@ -1651,7 +1645,7 @@ private:
 		vkUnmapMemory(device, uniformBuffersMemory[imageIndex]);
 	}
 
-	void drawFrame(bool flip) {
+	void drawFrame() {
 
 		glfwGetFramebufferSize(window, &WIDTH, &HEIGHT);
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
@@ -1659,8 +1653,8 @@ private:
 		VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-			recreateSwapChain(flip);
-			recreateImGuiWindow(flip);
+			recreateSwapChain();
+			recreateImGuiWindow();
 			return;
 		}
 		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
@@ -1712,8 +1706,8 @@ private:
 
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
 			framebufferResized = false;
-			recreateSwapChain(flip);
-			recreateImGuiWindow(flip);
+			recreateSwapChain();
+			recreateImGuiWindow();
 		}
 		else if (result != VK_SUCCESS) {
 			throw std::runtime_error("failed to present swap chain image!");
@@ -2250,6 +2244,9 @@ private:
 
 	void videoFrame()
 	{
+		/*int width = swapChainExtent.width;
+		int height = swapChainExtent.height;*/
+
 		bool supportsBlit = true;
 
 		// Check blit support for source and destination
@@ -2452,7 +2449,7 @@ private:
 		data += subResourceLayout.offset;
 
 		tempVideoFrame = cv::Mat4b(swapChainExtent.height, swapChainExtent.width);
-		size_t t = (swapChainExtent.width * swapChainExtent.height * 4);// +3 * (swapChainExtent.height * 32 + swapChainExtent.width * 32);
+		size_t t = swapChainExtent.width * swapChainExtent.height * 4;
 		//std::cout << vf << std::endl;
 		memcpy(tempVideoFrame.data, data, t);
 
@@ -2499,20 +2496,20 @@ private:
 		IMAGE_NAMES[0] = imageName;
 		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;
 		DigitalSignature app;
-		app.run(flip, resize);
+		app.run(resize, flip);
 	}
 
 	// Utility function to link OpenCV.
-	unsigned char* cvMat2TexInput(cv::Mat& img, bool flip)
+	void cvMat2TexInput(bool flip)
 	{
-		cv::cvtColor(img, img, cv::COLOR_BGR2RGBA);
+		cv::cvtColor(frame, frame, cv::COLOR_BGR2RGBA);
 		if (!flip) {
-			cv::transpose(img, img);
-			cv::flip(img, img, 1);
+			cv::transpose(frame, frame);
+			cv::flip(frame, frame, 1);
 		}
 		//cv::flip(img, img, 1);
 		//cv::flip(img, img, 0);
-		return img.data;
+		image = frame.data;
 	}
 };
 
@@ -2520,7 +2517,7 @@ int main() {
 	DigitalSignature app;
 
 	try {
-		app.run(false, 1.0);
+		app.run(1.0, false);
 	}
 	catch (const std::exception& e) {
 		std::cerr << e.what() << std::endl;
