@@ -39,9 +39,10 @@
 
 #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")*/
 
-int WIDTH = 800;
-int HEIGHT = 600;
+int WIDTH, HEIGHT;
 //double ASPECTRATIO = 1.0f;
+
+bool video;
 
 double deltaTime = 0.0, lastFrame = 0.0;
 
@@ -49,14 +50,15 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
 
-std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", logoImageName = "Images\\Logos\\LogoUno.png",
+std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", 
+logoImageName = "Images\\Logos\\LogoUno.png", videoName = "D:\\Videos\\BlasSaltando.mp4",
 imageOne = "Images\\texture.jpg";// "Images\\WindVelocity_4.jpg";
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { videoName, logoImageName };
 
 //std::string videoName = "D:\\Videos\\SlowOldWatch.mp4";
 //std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
-std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
+//std::string videoName = "D:\\Videos\\BlasSaltando.mp4";
 //std::string videoName = "D:\\Videos\\SimAUDWorkshop\\Introduction\\Introduction.mp4";
 
 const std::vector<const char*> validationLayers = {
@@ -163,7 +165,15 @@ const std::vector<uint16_t> indices = {
 class DigitalSignature {
 public:
 	void run(float resize, bool flip) {
-		openVideo(resize, flip);
+		photoOrVideo();
+		if (video) {
+			openVideo(resize, flip);
+			videoName = IMAGE_NAMES[0];
+			IMAGE_NAMES[0] = "Images\\Logos\\LogoUno.png";
+		}
+		else {
+			openImage(resize, flip);
+		}
 		initWindow();
 		initVulkan();
 		mainLoop(flip);
@@ -241,6 +251,7 @@ private:
 	bool changeImage = false;
 	bool writeImage = false;
 	bool framebufferResized = false;
+	bool showOpenCV = false;
 	float sizeMultiplier = 5.0f, alpha = 0.1f, xTrans = 0.0f, yTrans = 0.0f, transparency = 0.0f, resize = 1.0f;
     std::string tempOutImageName;
 	// List box
@@ -360,6 +371,7 @@ private:
 		if (ImGui::Button("Reload")) {
 			changeImage = true;
 		}
+		ImGui::Checkbox("Show OpenCV", &showOpenCV);
 		ImGui::Checkbox("Flip Image", &flip);
 		ImGui::SliderFloat("Size", &sizeMultiplier, 0.0, 10.0, "%.3f", 1.0f);
 		ImGui::SliderFloat("Resize Window", &resize, 1.0, 10.0, "%.3f", 1.0f);
@@ -402,15 +414,43 @@ private:
 		}
 	}
 
+	void photoOrVideo()
+	{
+		std::string fileType = split(IMAGE_NAMES[0].c_str(), ".");
+		if (fileType.compare("mp4") == 0 || fileType.compare("avi") == 0 || fileType.compare("mpe") == 0 ||
+			fileType.compare("mpg") == 0 || fileType.compare("mp2") == 0 || fileType.compare("mpeg") == 0) {
+			video = true;
+			/*IMAGE_NAMES[0] = "Images\\texture.jpg";
+			openVideo(resize, flip);*/
+		}
+		else {
+			video = false;
+		}
+	}
+
+	std::string split(const char *phrase, std::string delimiter) {
+		std::vector<std::string> list;
+		std::string s = std::string(phrase);
+		size_t pos = 0;
+		std::string token;
+		while ((pos = s.find(delimiter)) != std::string::npos) {
+			token = s.substr(0, pos);
+			list.push_back(token);
+			s.erase(0, pos + delimiter.length());
+		}
+		list.push_back(s);
+		std::string fileType = list[list.size() - 1];
+		transform(fileType.begin(), fileType.end(), fileType.begin(), ::tolower);
+		return fileType;
+	}
+
 	void openVideo(float resize, bool flip) {
 		cap.open(videoName);
 		if (!cap.isOpened()) {
-			std::runtime_error("Video file not loaded!");
+			std::runtime_error("Video file not loaded! Either the path is not correct or the file type is not supported!");
 		}
 		cap >> frame;
 		numberOfFrames = (int)cap.get(cv::CAP_PROP_FRAME_COUNT);
-		/*videoWidth = (int)((float)frame.rows / resize);
-		videoHeight = (int)((float)frame.cols / resize);*/
 		videoWidth = frame.rows;
 		videoHeight = frame.cols;
 		WIDTH = videoWidth / resize;
@@ -425,26 +465,33 @@ private:
 		cvMat2TexInput(flip);
 	}
 
-	void openImage() {
-		frame = cv::imread(imageOne.c_str(), cv::IMREAD_COLOR);
+	// Open image using OpenCV.
+	void openImage(float resize, bool flip) {
+		frame = cv::imread(IMAGE_NAMES[0].c_str(), cv::IMREAD_COLOR);
 		if (frame.empty()) {
 			std::runtime_error("Couldn't open image file");
 			exit(1);
 		}
-		videoWidth = (int)((float)frame.rows / resize);
-		videoHeight = (int)((float)frame.cols / resize);
-		channels = frame.channels();
+		videoWidth = frame.rows;
+		videoHeight = frame.cols;
+		WIDTH = videoWidth / resize;
+		HEIGHT = videoHeight / resize;
+		if (flip) {
+			int tempWidth = videoWidth;
+			videoWidth = videoHeight;
+			videoHeight = tempWidth;
+			WIDTH = videoWidth;
+			HEIGHT = videoHeight;
+		}
 		cvMat2TexInput(flip);
 	}
 
 	void openWriter() {
 		int codec = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-		//int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
-		//int codec = cv::VideoWriter::fourcc(*'avc1');
 		double fps = cap.get(cv::CAP_PROP_FPS);
 		std::string fileName = "Videos\\Test.mp4";
-		//bool isColor = (frame.type() == CV_8UC3);
-		writer.open(fileName, codec, fps, tempVideoFrame.size(), true);
+		bool isColor = (frame.type() == CV_8UC3);
+		writer.open(fileName, codec, fps, tempVideoFrame.size(), isColor);
 		if (!writer.isOpened()) {
 			std::cerr << "Could not open the output video file for write\n";
 			exit(1);
@@ -483,64 +530,87 @@ private:
 	}
 
 	void mainLoop(bool flip) {
-		while (!glfwWindowShouldClose(window) && !changeImage) {
-			glfwPollEvents();
-			cap >> frame;
-			frameCounter++;
-			if (frameCounter == numberOfFrames - 1) {
-				frameCounter = 0;
-				cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-				if (writing) {
-					writing = false;
-					writer.release();
+		if (video) {
+			while (!glfwWindowShouldClose(window) && !changeImage) {
+				glfwPollEvents();
+				cap >> frame;
+				frameCounter++;
+				if (frameCounter == numberOfFrames - 1) {
+					frameCounter = 0;
+					cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+					if (writing) {
+						writing = false;
+						writer.release();
+					}
 				}
-			}
 
-			if (writeImage) {
-				frameCounter = 0;
-				writeImage = false;
-				writing = true;
-				cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-				openWriter();
-			}
+				if (writeImage) {
+					frameCounter = 0;
+					writeImage = false;
+					writing = true;
+					cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+					openWriter();
+				}
 
-			if (frame.empty()) {
-				break;
-			} 
-			cvMat2TexInput(flip);
-			if (image == NULL) {
-				break;
+				if (frame.empty()) {
+					break;
+				}
+				cvMat2TexInput(flip);
+				if (image == NULL) {
+					break;
+				}
+				createTextureImageVideo();
+				createTextureImageVideoView();
+				createTextureVideoSampler();
+				createDescriptorPoolVideo();
+				createVideoDescriptorSets();
+
+				if (!isImGuiWindowCreated) {
+					imGuiSetupWindow();
+					isImGuiWindowCreated = true;
+				}
+				createCommandBuffers();
+				updateUniformBuffer();
+				videoFrame();
+
+				// The frameCounter should be bigger than the frames in flight.
+				if (writing && frameCounter > MAX_FRAMES_IN_FLIGHT) {
+					writer << tempVideoFrame;
+					//std::cout << frameCounter << std::endl;
+				}
+
+				if (showOpenCV) {
+					cv::imshow("Digital Signature", tempVideoFrame);
+				}
+
+				else {
+					cv::destroyAllWindows();
+				}
+				drawFrame();
 			}
-			createTextureImageVideo();
-			createTextureImageVideoView();
-			createTextureVideoSampler();
-			/*createDescriptorPool();
-			createDescriptorSets();*/
-			createDescriptorPoolVideo();
-			createVideoDescriptorSets();
-			
-			if (!isImGuiWindowCreated) {
-				imGuiSetupWindow();
-				isImGuiWindowCreated = true;
-			}
-			createCommandBuffers();
-			updateUniformBuffer();
-			videoFrame();
-			
-			// The frameCounter should be bigger than the frames in flight.
-			if (writing && frameCounter > MAX_FRAMES_IN_FLIGHT) {
-				writer << tempVideoFrame;
-				std::cout << frameCounter << std::endl;
-			}
-			cv::imshow("Live", tempVideoFrame);
-			drawFrame();
+			vkDeviceWaitIdle(device);
+			ImGui_ImplVulkan_Shutdown();
+			ImGui_ImplGlfw_Shutdown();
+			ImGui::DestroyContext();
+			cap.release();
+			writer.release();
 		}
-		vkDeviceWaitIdle(device);
-		ImGui_ImplVulkan_Shutdown();
-		ImGui_ImplGlfw_Shutdown();
-		ImGui::DestroyContext();
-		cap.release();
-		writer.release();
+		else {
+			while (!glfwWindowShouldClose(window) && !changeImage) {
+				glfwPollEvents();
+				if (!isImGuiWindowCreated) {
+					imGuiSetupWindow();
+					isImGuiWindowCreated = true;
+				}
+				createCommandBuffers();
+				updateUniformBuffer();
+				drawFrame();
+			}
+			vkDeviceWaitIdle(device);
+			ImGui_ImplVulkan_Shutdown();
+			ImGui_ImplGlfw_Shutdown();
+			ImGui::DestroyContext();
+		}
 	}
 
 	void cleanupSwapChain() {
@@ -566,6 +636,7 @@ private:
 		}
 
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+		vkDestroyDescriptorPool(device, videoDescriptorPool, nullptr);
 	}
 
 	void cleanup() {
@@ -578,14 +649,15 @@ private:
 			vkDestroyImage(device, textureImage[i], nullptr);
 			vkFreeMemory(device, textureImageMemory[i], nullptr);
 		}
+
 		vkDestroySampler(device, textureSamplerVideo, nullptr);
 		vkDestroyImageView(device, textureImageVideoView, nullptr);
 
 		vkDestroyImage(device, textureImageVideo, nullptr);
 		vkFreeMemory(device, textureImageVideoMemory, nullptr);
+		vkDestroyDescriptorSetLayout(device, videoDescriptorSetLayout, nullptr);
 
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, videoDescriptorSetLayout, nullptr);
 
 		vkDestroyBuffer(device, indexBuffer, nullptr);
 		vkFreeMemory(device, indexBufferMemory, nullptr);
@@ -627,11 +699,9 @@ private:
 		cleanupSwapChain();
 
 		createSwapChain();
-		//openVideo(flip);
-		//openWriter();
-		/*createTextureImageVideo();
+		createTextureImageVideo();
 		createTextureImageVideoView();
-		createTextureVideoSampler();*/
+		createTextureVideoSampler();
 		createImageViews();
 		createRenderPass();
 		createGraphicsPipeline();
@@ -639,6 +709,8 @@ private:
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
+		createDescriptorPoolVideo();
+		createVideoDescriptorSets();
 		createCommandBuffers();
 	}
 
@@ -1738,10 +1810,11 @@ private:
 		deltaTime = time - lastFrame;
 		lastFrame = time;
 
-		/*if (writeImage || glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
+		//if (writeImage || glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
+		if (writeImage && !video) {
 			SaveOutputColorTexture();
 			writeImage = false;
-		}*/
+		}
 
 		UniformBufferObject ubo = {};
 		ubo.iResolution = glm::vec2(WIDTH, HEIGHT);
