@@ -195,7 +195,7 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	VkRenderPass renderPass;
-	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorSetLayout descriptorSetLayout, videoDescriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 
@@ -221,6 +221,10 @@ private:
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
+
+	// Video descriptorSets.
+	VkDescriptorPool videoDescriptorPool;
+	std::vector<VkDescriptorSet> videoDescriptorSets;
 
 	std::vector<VkCommandBuffer> commandBuffers;
 
@@ -463,17 +467,17 @@ private:
 		createTextureImage(flip);
 		createTextureImageView();
 		createTextureSampler();
-		//openVideo(resize, flip);
 		createTextureImageVideo();
 		createTextureImageVideoView();
 		createTextureVideoSampler();
 		videoFrame();
-		//openWriter();
 		createVertexBuffer();
 		createIndexBuffer();
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
+		createDescriptorPoolVideo();
+		createVideoDescriptorSets();
 		createSyncObjects();
 		initImGui(float(swapChainExtent.width), float(swapChainExtent.height));
 	}
@@ -510,8 +514,10 @@ private:
 			createTextureImageVideo();
 			createTextureImageVideoView();
 			createTextureVideoSampler();
-			createDescriptorPool();
-			createDescriptorSets();
+			/*createDescriptorPool();
+			createDescriptorSets();*/
+			createDescriptorPoolVideo();
+			createVideoDescriptorSets();
 			
 			if (!isImGuiWindowCreated) {
 				imGuiSetupWindow();
@@ -521,8 +527,8 @@ private:
 			updateUniformBuffer();
 			videoFrame();
 			
-			// The frameCounter conditional is hacky and should be replaced.
-			if (writing && frameCounter > 3) {
+			// The frameCounter should be bigger than the frames in flight.
+			if (writing && frameCounter > MAX_FRAMES_IN_FLIGHT) {
 				writer << tempVideoFrame;
 				std::cout << frameCounter << std::endl;
 			}
@@ -579,6 +585,7 @@ private:
 		vkFreeMemory(device, textureImageVideoMemory, nullptr);
 
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, videoDescriptorSetLayout, nullptr);
 
 		vkDestroyBuffer(device, indexBuffer, nullptr);
 		vkFreeMemory(device, indexBufferMemory, nullptr);
@@ -881,25 +888,61 @@ private:
 
 		VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
 		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorCount = 3;
+		samplerLayoutBinding.descriptorCount = 2;
 		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		samplerLayoutBinding.pImmutableSamplers = nullptr;
 		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		/*VkDescriptorSetLayoutBinding fontLayoutBinding = {};
-		fontLayoutBinding.binding = 2;
-		fontLayoutBinding.descriptorCount = 1;
-		fontLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		fontLayoutBinding.pImmutableSamplers = nullptr;
-		fontLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;*/
-
-		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding }; //, videoSamplerLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 		layoutInfo.pBindings = bindings.data();
 
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor set layout!");
+		}
+
+		VkDescriptorSetLayoutBinding videoSamplerLayoutBinding = {};
+		videoSamplerLayoutBinding.binding = 0;
+		videoSamplerLayoutBinding.descriptorCount = 1;
+		videoSamplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		videoSamplerLayoutBinding.pImmutableSamplers = nullptr;
+		videoSamplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutCreateInfo videoLayoutInfo = {};
+		videoLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		videoLayoutInfo.bindingCount = 1;
+		videoLayoutInfo.pBindings = &videoSamplerLayoutBinding;
+
+		if (vkCreateDescriptorSetLayout(device, &videoLayoutInfo, nullptr, &videoDescriptorSetLayout) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor set layout!");
+		}
+	}
+
+	void createVideoDescriptorSetLayout()
+	{
+		VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+		samplerLayoutBinding.binding = 0;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		/*VkDescriptorSetLayoutBinding videoSamplerLayoutBinding = {};
+		samplerLayoutBinding.binding = 2;
+		samplerLayoutBinding.descriptorCount = 1;
+		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBinding.pImmutableSamplers = nullptr;
+		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		VkDescriptorSetLayoutBinding binding = { uboLayoutBinding, samplerLayoutBinding };*/
+		VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &samplerLayoutBinding;// bindings.data();
+
+		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &videoDescriptorSetLayout) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create descriptor set layout!");
 		}
 
@@ -1007,10 +1050,12 @@ private:
 		colorBlending.blendConstants[2] = 0.0f;
 		colorBlending.blendConstants[3] = 0.0f;
 
+		std::array<VkDescriptorSetLayout, 2> descriptorLayoutBindings = { descriptorSetLayout, videoDescriptorSetLayout };
+
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+		pipelineLayoutInfo.setLayoutCount = descriptorLayoutBindings.size();
+		pipelineLayoutInfo.pSetLayouts = descriptorLayoutBindings.data();
 
 		if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create pipeline layout!");
@@ -1379,7 +1424,9 @@ private:
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 3;
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) * 2;
+		/*poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImages.size());*/
 		// This Descriptor Pool is Used by ImGui
 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
@@ -1392,6 +1439,22 @@ private:
 
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create descriptor pool!");
+		}
+	}
+
+	void createDescriptorPoolVideo() {
+		VkDescriptorPoolSize poolSize = {};
+		poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		poolSize.descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+
+		VkDescriptorPoolCreateInfo poolInfo = {};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size()) + 1;
+
+		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &videoDescriptorPool) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create video descriptor pool!");
 		}
 	}
 
@@ -1415,16 +1478,21 @@ private:
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo[3] = {};
+			VkDescriptorImageInfo imageInfo[2] = {};
 			imageInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo[0].imageView = textureImageView[0];
 			imageInfo[0].sampler = textureSampler[0];
 			imageInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo[1].imageView = textureImageView[1];
 			imageInfo[1].sampler = textureSampler[1];
-			imageInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			/*imageInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			imageInfo[2].imageView = textureImageVideoView;
 			imageInfo[2].sampler = textureSamplerVideo;
+
+			VkDescriptorImageInfo videoInfo = {};
+			videoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			videoInfo.imageView = textureImageVideoView;
+			videoInfo.sampler = textureSamplerVideo;*/
 
 			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
 
@@ -1441,10 +1509,53 @@ private:
 			descriptorWrites[1].dstBinding = 1;
 			descriptorWrites[1].dstArrayElement = 0;
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 3;
+			descriptorWrites[1].descriptorCount = 2;
 			descriptorWrites[1].pImageInfo = imageInfo;
 
+			/*descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[2].dstSet = descriptorSets[i];
+			descriptorWrites[2].dstBinding = 2;
+			descriptorWrites[2].dstArrayElement = 0;
+			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[2].descriptorCount = 1;
+			descriptorWrites[2].pImageInfo = &videoInfo;*/
+
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		}
+	}
+
+	void createVideoDescriptorSets() {
+		std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), videoDescriptorSetLayout);
+		VkDescriptorSetAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = videoDescriptorPool;
+		allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChainImages.size());
+		allocInfo.pSetLayouts = layouts.data();
+		videoDescriptorSets.resize(swapChainImages.size());
+
+		if (vkAllocateDescriptorSets(device, &allocInfo, videoDescriptorSets.data()) != VK_SUCCESS) {
+			throw std::runtime_error("failed to allocate video descriptor sets!");
+		}
+
+
+		for (size_t i = 0; i < swapChainImages.size(); i++) {
+
+			VkDescriptorImageInfo videoInfo = {};
+			videoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			videoInfo.imageView = textureImageVideoView;
+			videoInfo.sampler = textureSamplerVideo;
+
+			VkWriteDescriptorSet descriptorWrites = {};
+
+			descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites.dstSet = videoDescriptorSets[i];
+			descriptorWrites.dstBinding = 0;
+			descriptorWrites.dstArrayElement = 0;
+			descriptorWrites.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites.descriptorCount = 1;
+			descriptorWrites.pImageInfo = &videoInfo;
+
+			vkUpdateDescriptorSets(device, 1, &descriptorWrites, 0, nullptr);
 		}
 	}
 
@@ -1574,7 +1685,10 @@ private:
 
 			vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
+			std::array<VkDescriptorSet, 2> descriptorSetsArray = { descriptorSets[i], videoDescriptorSets[i] };
+
+			//vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSets[i], 0, nullptr);
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorSetsArray.size(), descriptorSetsArray.data(), 0, nullptr);
 
 			vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 

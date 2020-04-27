@@ -1,0 +1,9 @@
+D:\SSS\DigitalSignature\DigitalSignature\Videos\Test.mp4
+
+The command
+
+D:\Downloads\ffmpeg-20200225-36451f9-win64-static\ffmpeg-20200225-36451f9-win64-static\bin\
+
+ffmpeg -ss 00:00:00 -t 00:00:00.1 -i D:\SSS\DigitalSignature\DigitalSignature\Videos\Test.mp4 -r 30.0 D:\SSS\DigitalSignature\DigitalSignature\Videos\Test%4d.jpg
+
+D:\Downloads\ffmpeg-20200225-36451f9-win64-static\ffmpeg-20200225-36451f9-win64-static\bin\ffmpeg -ss 00:00:00 -t 00:00:01.0 -i D:\SSS\DigitalSignature\DigitalSignature\Videos\Test.mp4 -r 30.0 D:\SSS\DigitalSignature\DigitalSignature\Videos\Test%4d.jpg
