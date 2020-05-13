@@ -112,10 +112,13 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\VulkanSDK\1.2.131.2\Lib;D:\Libraries\glfw-3.3.2\Build\src\Debug;D:\Programas\LatestOpenCV\opencv\build\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;opencv_core412.lib;opencv_imgcodecs412.lib;opencv_imgproc412.lib;opencv_highgui412.lib;opencv_ml412.lib;opencv_video412.lib;opencv_features2d412.lib;opencv_calib3d412.lib;opencv_objdetect412.lib;opencv_flann412.lib;opencv_videoio412.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\VulkanSDK\1.2.131.2\Lib;D:\Libraries\glfw-3.3.2\Build\src\Debug;D:\Programas\LatestOpenCV\opencv\build\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;opencv_core412d.lib;opencv_imgcodecs412d.lib;opencv_imgproc412d.lib;opencv_highgui412d.lib;opencv_ml412d.lib;opencv_video412d.lib;opencv_features2d412.lib;opencv_calib3d412d.lib;opencv_objdetect412d.lib;opencv_flann412d.lib;opencv_videoio412d.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
     </Link>
+    <ProjectReference>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
+    </ProjectReference>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>

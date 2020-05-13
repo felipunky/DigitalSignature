@@ -9,6 +9,7 @@
 #include <stb_image_write.h>
 
 #include <iostream>
+#include <ppl.h>
 #include <fstream>
 #include <stdexcept>
 #include <algorithm>
@@ -50,11 +51,12 @@ const int NUMBER_OF_IMAGES = 2;
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
 
-std::string imageName = "Images\\texture.jpg", outputImageName = "Images\\Test", 
-logoImageName = "Images\\Logos\\LogoUno.png", videoName = "D:\\Videos\\BlasSaltando.mp4",
-imageOne = "Images\\texture.jpg";// "Images\\WindVelocity_4.jpg";
+std::string imageName = "D:\\SSS\\Videos\\ShowOff\\GIS.mp4", logoImageName = "Images\\Logos\\LogoUno.png", outputImageName = "Images\\Test";
+/*
+logoImageName = "Images\\Logos\\LogoUno.png", videoName = "D:\\SSS\\Videos\\ShowOff\\GIS.mp4",//"D:\\Videos\\BlasSaltando.mp4",
+imageOne = "Images\\texture.jpg";*/// "Images\\WindVelocity_4.jpg";
 
-std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { videoName, logoImageName };
+std::string IMAGE_NAMES[NUMBER_OF_IMAGES] = { imageName, logoImageName };
 
 //std::string videoName = "D:\\Videos\\SlowOldWatch.mp4";
 //std::string videoName = "D:\\SSS\\GUNClub\\Renders\\HighFinal\\VideoFinalFinal.mp4";
@@ -150,7 +152,6 @@ struct Vertex {
 	}
 };
 
-
 const std::vector<Vertex> vertices = {
 	{{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
 	{{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
@@ -168,10 +169,11 @@ public:
 		photoOrVideo();
 		if (video) {
 			openVideo(resize, flip);
-			videoName = IMAGE_NAMES[0];
+			//videoName = IMAGE_NAMES[0];
 			IMAGE_NAMES[0] = "Images\\Logos\\LogoUno.png";
 		}
 		else {
+			IMAGE_NAMES[0] = imageName;
 			openImage(resize, flip);
 		}
 		initWindow();
@@ -232,6 +234,13 @@ private:
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
 
+	std::vector<VkImage> textureImagesVideo;
+	std::vector<VkImageView> textureImageVideoViews;
+	std::vector<VkSampler> textureVideoSamplers;
+	std::vector<VkBuffer> videoBuffers;
+	std::vector<VkDeviceMemory> videoBuffersMemory;
+	VkDeviceSize videoImageSize;
+
 	// Video descriptorSets.
 	VkDescriptorPool videoDescriptorPool;
 	std::vector<VkDescriptorSet> videoDescriptorSets;
@@ -253,7 +262,7 @@ private:
 	bool framebufferResized = false;
 	bool showOpenCV = false;
 	float sizeMultiplier = 5.0f, alpha = 0.1f, xTrans = 0.0f, yTrans = 0.0f, transparency = 0.0f, resize = 1.0f;
-    std::string tempOutImageName;
+	std::string tempOutImageName;
 	// List box
 	const char* listbox_items[5] = { ".png", ".jpg", ".ppm", ".bmp", ".tga" };// , ".hdr" };
 	int fileFormat;
@@ -269,10 +278,10 @@ private:
 	cv::VideoWriter writer;
 	int writing = false;
 
-	VkImage textureImageVideo;
+	/*VkImage textureImageVideo;
 	VkDeviceMemory textureImageVideoMemory;
 	VkImageView textureImageVideoView;
-	VkSampler textureSamplerVideo;
+	VkSampler textureSamplerVideo;*/
 
 	float time;
 
@@ -416,7 +425,7 @@ private:
 
 	void photoOrVideo()
 	{
-		std::string fileType = split(IMAGE_NAMES[0].c_str(), ".");
+		std::string fileType = split(imageName.c_str(), ".");
 		if (fileType.compare("mp4") == 0 || fileType.compare("avi") == 0 || fileType.compare("mpe") == 0 ||
 			fileType.compare("mpg") == 0 || fileType.compare("mp2") == 0 || fileType.compare("mpeg") == 0) {
 			video = true;
@@ -445,7 +454,7 @@ private:
 	}
 
 	void openVideo(float resize, bool flip) {
-		cap.open(videoName);
+		cap.open(imageName);
 		if (!cap.isOpened()) {
 			std::runtime_error("Video file not loaded! Either the path is not correct or the file type is not supported!");
 		}
@@ -553,25 +562,24 @@ private:
 				}
 
 				if (frame.empty()) {
-					break;
+					continue;
 				}
 				cvMat2TexInput(flip);
 				if (image == NULL) {
-					break;
+					continue;
 				}
-				createTextureImageVideo();
-				createTextureImageVideoView();
-				createTextureVideoSampler();
-				createDescriptorPoolVideo();
-				createVideoDescriptorSets();
 
 				if (!isImGuiWindowCreated) {
 					imGuiSetupWindow();
 					isImGuiWindowCreated = true;
 				}
+				updateVideoFrame();
 				createCommandBuffers();
-				updateUniformBuffer();
-				videoFrame();
+				// Multithreaded videoFrame.
+				std::thread videoThread (&DigitalSignature::videoFrame, this);
+				videoThread.join();
+				// Singlethreaded approach.
+				//videoFrame();
 
 				// The frameCounter should be bigger than the frames in flight.
 				if (writing && frameCounter > MAX_FRAMES_IN_FLIGHT) {
@@ -587,6 +595,7 @@ private:
 					cv::destroyAllWindows();
 				}
 				drawFrame();
+
 			}
 			vkDeviceWaitIdle(device);
 			ImGui_ImplVulkan_Shutdown();
@@ -603,7 +612,6 @@ private:
 					isImGuiWindowCreated = true;
 				}
 				createCommandBuffers();
-				updateUniformBuffer();
 				drawFrame();
 			}
 			vkDeviceWaitIdle(device);
@@ -633,6 +641,8 @@ private:
 		for (size_t i = 0; i < swapChainImages.size(); i++) {
 			vkDestroyBuffer(device, uniformBuffers[i], nullptr);
 			vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+			vkDestroyBuffer(device, videoBuffers[i], nullptr);
+			vkFreeMemory(device, videoBuffersMemory[i], nullptr);
 		}
 
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -650,14 +660,21 @@ private:
 			vkFreeMemory(device, textureImageMemory[i], nullptr);
 		}
 
-		vkDestroySampler(device, textureSamplerVideo, nullptr);
+		/*vkDestroySampler(device, textureSamplerVideo, nullptr);
 		vkDestroyImageView(device, textureImageVideoView, nullptr);
 
 		vkDestroyImage(device, textureImageVideo, nullptr);
-		vkFreeMemory(device, textureImageVideoMemory, nullptr);
-		vkDestroyDescriptorSetLayout(device, videoDescriptorSetLayout, nullptr);
+		vkFreeMemory(device, textureImageVideoMemory, nullptr);*/
+
+		for (size_t i = 0; i < swapChainImages.size(); ++i) {
+			vkDestroySampler(device, textureVideoSamplers[i], nullptr);
+			vkDestroyImageView(device, textureImageVideoViews[i], nullptr);
+
+			vkDestroyImage(device, textureImagesVideo[i], nullptr);
+		}
 
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, videoDescriptorSetLayout, nullptr);
 
 		vkDestroyBuffer(device, indexBuffer, nullptr);
 		vkFreeMemory(device, indexBufferMemory, nullptr);
@@ -699,14 +716,13 @@ private:
 		cleanupSwapChain();
 
 		createSwapChain();
-		createTextureImageVideo();
-		createTextureImageVideoView();
-		createTextureVideoSampler();
+
 		createImageViews();
 		createRenderPass();
 		createGraphicsPipeline();
 		createFramebuffers();
 		createUniformBuffers();
+		createTextureImageVideo();
 		createDescriptorPool();
 		createDescriptorSets();
 		createDescriptorPoolVideo();
@@ -1182,9 +1198,16 @@ private:
 	void createCommandPool() {
 		QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
 
-		VkCommandPoolCreateInfo poolInfo = {};
+		/*VkCommandPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();*/
+		VkCommandPoolCreateInfo poolInfo = {
+			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			nullptr,
+			VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+			VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+			queueFamilyIndices.graphicsFamily.value()
+		};
 
 		if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create graphics command pool!");
@@ -1238,8 +1261,34 @@ private:
 		if (!image) {
 			throw std::runtime_error("failed to load texture video!");
 		}
-		VkDeviceSize videoImageSize = videoHeight * videoWidth * 4;
-		VkBuffer videoBuffer;
+		videoImageSize = videoHeight * videoWidth * 4;
+
+		videoBuffers.resize(swapChainImages.size());
+		videoBuffersMemory.resize(swapChainImages.size());
+		textureImagesVideo.resize(swapChainImages.size());
+		textureImageVideoViews.resize(swapChainImages.size());
+		textureVideoSamplers.resize(swapChainImages.size());
+
+		for (size_t i = 0; i < swapChainImages.size(); ++i) {
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+			void *data;
+			VkResult result = vkMapMemory(device, stagingBufferMemory, 0, videoImageSize, 0, &data);
+			memcpy(data, image, static_cast<size_t>(videoImageSize));
+			/*vkUnmapMemory(device, videoBuffersMemory[imageIndex]);*/
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			createImage(videoWidth, videoHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImagesVideo[i], videoBuffersMemory[i]);
+
+			transitionImageLayout(textureImagesVideo[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			copyBufferToImage(stagingBuffer, textureImagesVideo[i], static_cast<uint32_t>(videoWidth), static_cast<uint32_t>(videoHeight));
+			transitionImageLayout(textureImagesVideo[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
+		}
+		/*VkBuffer videoBuffer;
 		VkDeviceMemory videoBufferMemory;
 		createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, videoBuffer, videoBufferMemory);
 
@@ -1253,9 +1302,9 @@ private:
 		transitionImageLayout(textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		copyBufferToImage(videoBuffer, textureImageVideo, static_cast<uint32_t>(videoWidth), static_cast<uint32_t>(videoHeight));
 		transitionImageLayout(textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		
+
 		vkDestroyBuffer(device, videoBuffer, nullptr);
-		vkFreeMemory(device, videoBufferMemory, nullptr);
+		vkFreeMemory(device, videoBufferMemory, nullptr);*/
 	}
 
 	void createTextureImageView() {
@@ -1266,7 +1315,10 @@ private:
 	}
 
 	void createTextureImageVideoView() {
-		textureImageVideoView = createImageView(&textureImageVideo, VK_FORMAT_R8G8B8A8_SRGB);
+		//textureImageVideoViews[imageIndex] = createImageView(&textureImagesVideo[imageIndex], VK_FORMAT_R8G8B8A8_SRGB);
+		for (size_t i = 0; i < swapChainImages.size(); ++i) {
+			textureImageVideoViews[i] = createImageView(&textureImagesVideo[i], VK_FORMAT_R8G8B8A8_SRGB);
+		}
 	}
 
 	void createTextureSampler() {
@@ -1308,8 +1360,13 @@ private:
 		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSamplerVideo) != VK_SUCCESS) {
+		/*if (vkCreateSampler(device, &samplerInfo, nullptr, &textureVideoSamplers[imageIndex]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create texture sampler!");
+		}*/
+		for (size_t i = 0; i < swapChainImages.size(); ++i) {
+			if (vkCreateSampler(device, &samplerInfo, nullptr, &textureVideoSamplers[i]) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create texture sampler!");
+			}
 		}
 	}
 
@@ -1609,13 +1666,12 @@ private:
 			throw std::runtime_error("failed to allocate video descriptor sets!");
 		}
 
-
 		for (size_t i = 0; i < swapChainImages.size(); i++) {
 
 			VkDescriptorImageInfo videoInfo = {};
 			videoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			videoInfo.imageView = textureImageVideoView;
-			videoInfo.sampler = textureSamplerVideo;
+			videoInfo.imageView = textureImageVideoViews[i];
+			videoInfo.sampler = textureVideoSamplers[i];
 
 			VkWriteDescriptorSet descriptorWrites = {};
 
@@ -1729,6 +1785,7 @@ private:
 		}
 
 		for (size_t i = 0; i < commandBuffers.size(); i++) {
+		//concurrency::parallel_for(size_t(0), commandBuffers.size(), [&](size_t i) {
 			VkCommandBufferBeginInfo beginInfo = {};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -1776,6 +1833,8 @@ private:
 				throw std::runtime_error("failed to record command buffer!");
 			}
 		}
+		//});
+		//vkDestroyBuffer(device, videoBuffers[imageIndex], nullptr);
 		isImGuiWindowCreated = false;
 	}
 
@@ -1832,9 +1891,91 @@ private:
 		vkUnmapMemory(device, uniformBuffersMemory[imageIndex]);
 	}
 
+	void updateVideoFrame() {
+		//vkDeviceWaitIdle(device);
+		/*vkDestroyBuffer(device, videoBuffers[currentFrame], nullptr);*/
+		//vkUnmapMemory(device, videoBuffersMemory[currentFrame]);
+		vkFreeMemory(device, videoBuffersMemory[currentFrame], nullptr);
+		vkDestroySampler(device, textureVideoSamplers[currentFrame], nullptr);
+		vkDestroyImageView(device, textureImageVideoViews[currentFrame], nullptr);
+		vkDestroyImage(device, textureImagesVideo[currentFrame], nullptr);
+
+		//createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, videoBuffer, videoBufferMemory);
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		createBuffer(videoImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+		void *data;
+		VkResult result = vkMapMemory(device, stagingBufferMemory, 0, videoImageSize, 0, &data);
+		memcpy(data, image, static_cast<size_t>(videoImageSize));
+		/*vkUnmapMemory(device, videoBuffersMemory[imageIndex]);*/
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		createImage(videoWidth, videoHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImagesVideo[currentFrame], videoBuffersMemory[currentFrame]);
+
+		transitionImageLayout(textureImagesVideo[currentFrame], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(stagingBuffer, textureImagesVideo[currentFrame], static_cast<uint32_t>(videoWidth), static_cast<uint32_t>(videoHeight));
+		transitionImageLayout(textureImagesVideo[currentFrame], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+
+		/*vkAllocateMemory(device, )
+		//std::cout << videoBuffersMemory[imageIndex] << std::endl;
+		vkFreeMemory(device, videoBuffersMemory[currentFrame], nullptr);*/
+
+		textureImageVideoViews[currentFrame] = createImageView(&textureImagesVideo[currentFrame], VK_FORMAT_R8G8B8A8_SRGB);
+
+		VkSamplerCreateInfo samplerInfo = {};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureVideoSamplers[currentFrame]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create texture sampler!");
+		}
+
+		VkDescriptorImageInfo videoInfo = {};
+		videoInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		videoInfo.imageView = textureImageVideoViews[currentFrame];
+		videoInfo.sampler = textureVideoSamplers[currentFrame];
+
+		VkWriteDescriptorSet descriptorWrites = {};
+
+		descriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites.dstSet = videoDescriptorSets[currentFrame];
+		descriptorWrites.dstBinding = 0;
+		descriptorWrites.dstArrayElement = 0;
+		descriptorWrites.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites.descriptorCount = 1;
+		descriptorWrites.pImageInfo = &videoInfo;
+
+		vkUpdateDescriptorSets(device, 1, &descriptorWrites, 0, nullptr);
+
+		/*vkFreeMemory(device, videoBuffersMemory[imageIndex], nullptr);*/
+
+		/*vkDestroySampler(device, textureVideoSamplers[currentFrame], nullptr);
+		vkDestroyImageView(device, textureImageVideoViews[currentFrame], nullptr);
+
+		vkDestroyImage(device, textureImagesVideo[currentFrame], nullptr);*/
+		/*vkFreeMemory(device, textureImageMemory[imageIndex], nullptr);
+		vkDestroyBuffer(device, videoBuffer, nullptr);
+		vkFreeMemory(device, videoBufferMemory, nullptr);*/
+	}
+
 	void drawFrame() {
 
 		glfwGetFramebufferSize(window, &WIDTH, &HEIGHT);
+
 		vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 		VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -1848,12 +1989,13 @@ private:
 			throw std::runtime_error("failed to acquire swap chain image!");
 		}
 
+		updateUniformBuffer();
+
 		if (imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
 			vkWaitForFences(device, 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+			//updateVideoFrame();
 		}
 		imagesInFlight[imageIndex] = inFlightFences[currentFrame];
-
-		updateUniformBuffer();
 
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2434,13 +2576,13 @@ private:
 		/*int width = swapChainExtent.width;
 		int height = swapChainExtent.height;*/
 
-		bool supportsBlit = true;
+		//bool supportsBlit = true;
 
 		// Check blit support for source and destination
 		VkFormatProperties formatProps;
 
 		// Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
-		vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
+		/*vkGetPhysicalDeviceFormatProperties(physicalDevice, swapChainImageFormat, &formatProps);
 		if (!(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
 			//std::cerr << "Device does not support blitting from optimal tiled images, using copy instead of blit!" << std::endl;
 			supportsBlit = false;
@@ -2451,7 +2593,7 @@ private:
 		if (!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
 			//std::cerr << "Device does not support blitting to linear tiled images, using copy instead of blit!" << std::endl;
 			supportsBlit = false;
-		}
+		}*/
 
 		// Source for the copy is the last rendered swapchain image
 		VkImage srcImage = swapChainImages[currentFrame];
@@ -2554,7 +2696,7 @@ private:
 			VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
 
 		// If source and destination support blit we'll blit as this also does automatic format conversion (e.g. from BGR to RGB)
-		if (supportsBlit)
+		/*if (supportsBlit)
 		{
 			// Define the region to blit (we will blit the whole swapchain image)
 			VkOffset3D blitSize;
@@ -2578,7 +2720,7 @@ private:
 				&imageBlitRegion,
 				VK_FILTER_NEAREST);
 		}
-		else
+		else*/
 		{
 			// Otherwise use image copy (requires us to manually flip components)
 			VkImageCopy imageCopyRegion{};
@@ -2636,9 +2778,10 @@ private:
 		data += subResourceLayout.offset;
 
 		tempVideoFrame = cv::Mat4b(swapChainExtent.height, swapChainExtent.width);
-		size_t t = swapChainExtent.width * swapChainExtent.height * 4;
-		//std::cout << vf << std::endl;
-		memcpy(tempVideoFrame.data, data, t);
+		/*size_t t = swapChainExtent.width * swapChainExtent.height * 4;
+		memcpy(tempVideoFrame.data, data, t);*/
+		tempVideoFrame.data = data;
+		//tempVideoFrame = cv::Mat4b(swapChainExtent.height, swapChainExtent.width, cv::Vec4b(data), );
 
 		// Clean up resources
 		vkUnmapMemory(device, dstImageMemory);
@@ -2680,8 +2823,8 @@ private:
 
 	void changeImageName() {
 		glfwDestroyWindow(window);
-		IMAGE_NAMES[0] = imageName;
-		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;
+		/*IMAGE_NAMES[0] = imageName;
+		IMAGE_NAMES[NUMBER_OF_IMAGES-1] = logoImageName;*/
 		DigitalSignature app;
 		app.run(resize, flip);
 	}
