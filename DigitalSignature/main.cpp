@@ -564,7 +564,13 @@ private:
 				if (frame.empty()) {
 					continue;
 				}
+				// Singlethreaded.
+				//cvMat2TexInput(flip);
 				cvMat2TexInput(flip);
+				// Multi-threaded.
+				/*std::thread cvMatThread(&DigitalSignature::cvMat2TexInput(flip, &frame, image), this);
+				cvMatThread.join();*/
+
 				if (image == NULL) {
 					continue;
 				}
@@ -574,12 +580,14 @@ private:
 					isImGuiWindowCreated = true;
 				}
 				updateVideoFrame();
+				/*std::thread updateVideoFrameThread(&DigitalSignature::updateVideoFrame, this);
+				updateVideoFrameThread.join();*/
 				createCommandBuffers();
 				// Multithreaded videoFrame.
-				std::thread videoThread (&DigitalSignature::videoFrame, this);
-				videoThread.join();
+				/*std::thread videoThread (&DigitalSignature::videoFrame, this);
+				videoThread.join();*/
 				// Singlethreaded approach.
-				//videoFrame();
+				videoFrame();
 
 				// The frameCounter should be bigger than the frames in flight.
 				if (writing && frameCounter > MAX_FRAMES_IN_FLIGHT) {
